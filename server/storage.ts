@@ -1,37 +1,74 @@
-import { type User, type InsertUser } from "@shared/schema";
 import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import type { ExtractedData, WebsiteConfig } from "@shared/schema";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  saveExtractedData(sessionId: string, data: ExtractedData): Promise<void>;
+  getExtractedData(sessionId: string): Promise<ExtractedData | undefined>;
+  saveWebsiteConfig(sessionId: string, config: WebsiteConfig): Promise<void>;
+  getWebsiteConfig(sessionId: string): Promise<WebsiteConfig | undefined>;
+  saveGeneratedWebsite(sessionId: string, files: Map<string, string>): Promise<void>;
+  getGeneratedWebsite(sessionId: string): Promise<Map<string, string> | undefined>;
+  getLatestExtractedData(): Promise<ExtractedData | undefined>;
+  getLatestWebsiteConfig(): Promise<WebsiteConfig | undefined>;
+  getLatestGeneratedWebsite(): Promise<Map<string, string> | undefined>;
+  createSession(): Promise<string>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private extractedData: Map<string, ExtractedData>;
+  private websiteConfigs: Map<string, WebsiteConfig>;
+  private generatedWebsites: Map<string, Map<string, string>>;
+  private latestSessionId: string | null = null;
 
   constructor() {
-    this.users = new Map();
+    this.extractedData = new Map();
+    this.websiteConfigs = new Map();
+    this.generatedWebsites = new Map();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async createSession(): Promise<string> {
+    this.latestSessionId = randomUUID();
+    return this.latestSessionId;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async saveExtractedData(sessionId: string, data: ExtractedData): Promise<void> {
+    this.extractedData.set(sessionId, data);
+    this.latestSessionId = sessionId;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getExtractedData(sessionId: string): Promise<ExtractedData | undefined> {
+    return this.extractedData.get(sessionId);
+  }
+
+  async getLatestExtractedData(): Promise<ExtractedData | undefined> {
+    if (!this.latestSessionId) return undefined;
+    return this.extractedData.get(this.latestSessionId);
+  }
+
+  async saveWebsiteConfig(sessionId: string, config: WebsiteConfig): Promise<void> {
+    this.websiteConfigs.set(sessionId, config);
+  }
+
+  async getWebsiteConfig(sessionId: string): Promise<WebsiteConfig | undefined> {
+    return this.websiteConfigs.get(sessionId);
+  }
+
+  async getLatestWebsiteConfig(): Promise<WebsiteConfig | undefined> {
+    if (!this.latestSessionId) return undefined;
+    return this.websiteConfigs.get(this.latestSessionId);
+  }
+
+  async saveGeneratedWebsite(sessionId: string, files: Map<string, string>): Promise<void> {
+    this.generatedWebsites.set(sessionId, files);
+  }
+
+  async getGeneratedWebsite(sessionId: string): Promise<Map<string, string> | undefined> {
+    return this.generatedWebsites.get(sessionId);
+  }
+
+  async getLatestGeneratedWebsite(): Promise<Map<string, string> | undefined> {
+    if (!this.latestSessionId) return undefined;
+    return this.generatedWebsites.get(this.latestSessionId);
   }
 }
 
