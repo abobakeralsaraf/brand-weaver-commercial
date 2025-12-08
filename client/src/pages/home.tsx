@@ -70,13 +70,17 @@ export default function Home() {
     ],
   });
 
-  const [deploymentSteps, setDeploymentSteps] = useState([
-    { id: "repository", label: "Created GitHub repository", status: "pending" as const },
-    { id: "files", label: "Pushed website files", status: "pending" as const },
-    { id: "images", label: "Uploaded optimized images", status: "pending" as const },
-    { id: "pages", label: "Configured GitHub Pages", status: "pending" as const },
-    { id: "ssl", label: "SSL certificate enabled", status: "pending" as const },
-    { id: "domain", label: "Custom domain configured", status: "pending" as const },
+  const [deploymentSteps, setDeploymentSteps] = useState<Array<{
+    id: string;
+    label: string;
+    status: "pending" | "in_progress" | "completed" | "error";
+  }>>([
+    { id: "repository", label: "Created GitHub repository", status: "pending" },
+    { id: "files", label: "Pushed website files", status: "pending" },
+    { id: "images", label: "Uploaded optimized images", status: "pending" },
+    { id: "pages", label: "Configured GitHub Pages", status: "pending" },
+    { id: "ssl", label: "SSL certificate enabled", status: "pending" },
+    { id: "domain", label: "Custom domain configured", status: "pending" },
   ]);
   const [deploymentPercentage, setDeploymentPercentage] = useState(0);
   const [deploymentCurrentStep, setDeploymentCurrentStep] = useState("Initializing...");
@@ -84,7 +88,7 @@ export default function Home() {
   const extractMutation = useMutation({
     mutationFn: async (username: string) => {
       const response = await apiRequest("POST", "/api/extract", { username });
-      return response as ExtractedData;
+      return response as unknown as ExtractedData;
     },
     onSuccess: (data) => {
       setExtractedData(data);
@@ -106,7 +110,7 @@ export default function Home() {
         data: extractedData,
         config,
       });
-      return response as { previewUrl: string };
+      return response as unknown as { previewUrl: string; sessionId: string };
     },
     onSuccess: (data) => {
       setPreviewUrl(data.previewUrl);
@@ -210,7 +214,7 @@ export default function Home() {
       );
     }
     
-    setDeploymentSteps((prev) => prev.map((s) => ({ ...s, status: "completed" as const })));
+    setDeploymentSteps((prev) => prev.map((s) => ({ ...s, status: "completed" as const } as typeof s)));
 
     deployMutation.mutate(options);
   };

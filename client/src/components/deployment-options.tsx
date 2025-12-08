@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Github, Globe, ExternalLink, Lock, Zap } from "lucide-react";
+import { Github, Globe, ExternalLink, Lock, Zap, Triangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,10 +30,18 @@ const platforms = [
     recommended: false,
     features: ["Edge functions", "Form handling", "Better CDN"],
   },
+  {
+    id: "vercel" as const,
+    name: "Vercel",
+    description: "The platform for frontend developers",
+    icon: Triangle,
+    recommended: false,
+    features: ["Edge runtime", "Analytics", "Preview deployments"],
+  },
 ];
 
 export function DeploymentOptions({ onDeploy, onBack, isDeploying }: DeploymentOptionsProps) {
-  const [selectedPlatform, setSelectedPlatform] = useState<"github_pages" | "netlify">("github_pages");
+  const [selectedPlatform, setSelectedPlatform] = useState<"github_pages" | "netlify" | "vercel">("github_pages");
   const [repositoryName, setRepositoryName] = useState("");
   const [siteName, setSiteName] = useState("");
   const [customDomain, setCustomDomain] = useState("");
@@ -50,6 +58,8 @@ export function DeploymentOptions({ onDeploy, onBack, isDeploying }: DeploymentO
   const previewUrl =
     selectedPlatform === "github_pages"
       ? `${repositoryName || "your-site"}.github.io`
+      : selectedPlatform === "vercel"
+      ? `${siteName || "your-site"}.vercel.app`
       : `${siteName || "your-site"}.netlify.app`;
 
   return (
@@ -125,7 +135,9 @@ export function DeploymentOptions({ onDeploy, onBack, isDeploying }: DeploymentO
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="site-name">Site Name</Label>
+                <Label htmlFor="site-name">
+                  {selectedPlatform === "vercel" ? "Project Name" : "Site Name"}
+                </Label>
                 <Input
                   id="site-name"
                   placeholder="my-personal-website"
@@ -133,6 +145,11 @@ export function DeploymentOptions({ onDeploy, onBack, isDeploying }: DeploymentO
                   onChange={(e) => setSiteName(e.target.value)}
                   data-testid="input-site-name"
                 />
+                <p className="text-xs text-muted-foreground">
+                  {selectedPlatform === "vercel" 
+                    ? "Your site will be deployed to Vercel with this project name"
+                    : "Your site will be deployed to Netlify with this name"}
+                </p>
               </div>
             )}
 

@@ -5,6 +5,63 @@ import { extractLinkedInProfile } from "./linkedin";
 import { generateWebsite, createPreviewHtml } from "./website-generator";
 import { createZipArchive, createDataJson, createImagesArchive, createSourceArchive } from "./download";
 
+// Generate DNS records for custom domain setup
+function generateDnsRecords(platform: string, domain: string, siteName: string) {
+  const isApexDomain = !domain.includes('.') || domain.split('.').length === 2;
+  
+  switch (platform) {
+    case "github_pages":
+      return {
+        platform: "GitHub Pages",
+        records: isApexDomain ? [
+          { type: "A", name: "@", value: "185.199.108.153", ttl: "3600" },
+          { type: "A", name: "@", value: "185.199.109.153", ttl: "3600" },
+          { type: "A", name: "@", value: "185.199.110.153", ttl: "3600" },
+          { type: "A", name: "@", value: "185.199.111.153", ttl: "3600" },
+          { type: "CNAME", name: "www", value: `${siteName}.github.io`, ttl: "3600" },
+        ] : [
+          { type: "CNAME", name: domain.split('.')[0], value: `${siteName}.github.io`, ttl: "3600" },
+        ],
+        instructions: [
+          "Add the DNS records to your domain provider",
+          "Wait for DNS propagation (can take up to 48 hours)",
+          "Enable HTTPS in your GitHub repository settings",
+        ],
+      };
+    case "vercel":
+      return {
+        platform: "Vercel",
+        records: isApexDomain ? [
+          { type: "A", name: "@", value: "76.76.21.21", ttl: "3600" },
+          { type: "CNAME", name: "www", value: "cname.vercel-dns.com", ttl: "3600" },
+        ] : [
+          { type: "CNAME", name: domain.split('.')[0], value: "cname.vercel-dns.com", ttl: "3600" },
+        ],
+        instructions: [
+          "Add the DNS records to your domain provider",
+          "Add the domain in your Vercel project settings",
+          "Vercel will automatically provision SSL certificate",
+        ],
+      };
+    case "netlify":
+    default:
+      return {
+        platform: "Netlify",
+        records: isApexDomain ? [
+          { type: "A", name: "@", value: "75.2.60.5", ttl: "3600" },
+          { type: "CNAME", name: "www", value: `${siteName}.netlify.app`, ttl: "3600" },
+        ] : [
+          { type: "CNAME", name: domain.split('.')[0], value: `${siteName}.netlify.app`, ttl: "3600" },
+        ],
+        instructions: [
+          "Add the DNS records to your domain provider",
+          "Add the domain in your Netlify site settings",
+          "Netlify will automatically provision SSL certificate",
+        ],
+      };
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -88,16 +145,31 @@ export async function registerRoutes(
     try {
       const { platform, repositoryName, siteName, customDomain } = req.body;
 
-      // For now, simulate deployment
-      const baseUrl = platform === "github_pages" 
-        ? `https://${repositoryName || "user"}.github.io`
-        : `https://${siteName || "my-site"}.netlify.app`;
+      // Generate platform-specific URL
+      let baseUrl: string;
+      switch (platform) {
+        case "github_pages":
+          baseUrl = `https://${repositoryName || "user"}.github.io`;
+          break;
+        case "vercel":
+          baseUrl = `https://${siteName || "my-site"}.vercel.app`;
+          break;
+        case "netlify":
+        default:
+          baseUrl = `https://${siteName || "my-site"}.netlify.app`;
+          break;
+      }
 
-      const url = customDomain || baseUrl;
+      const url = customDomain ? `https://${customDomain}` : baseUrl;
+
+      // Generate DNS records for custom domain if specified
+      const dnsRecords = customDomain ? generateDnsRecords(platform, customDomain, siteName || repositoryName || "my-site") : undefined;
 
       res.json({ 
         success: true,
         url,
+        platform,
+        dnsRecords,
         message: "Website deployed successfully"
       });
     } catch (error: any) {
@@ -105,6 +177,28 @@ export async function registerRoutes(
       res.status(500).json({ 
         error: error.message || "Failed to deploy website" 
       });
+    }
+  });
+
+  // Get DNS setup guidance
+  app.get("/api/dns-guidance", async (req: Request, res: Response) => {
+    try {
+      const { platform, domain, siteName } = req.query;
+      
+      if (!platform || !domain) {
+        return res.status(400).json({ error: "Platform and domain are required" });
+      }
+
+      const dnsRecords = generateDnsRecords(
+        platform as string, 
+        domain as string, 
+        siteName as string || "my-site"
+      );
+
+      res.json({ dnsRecords });
+    } catch (error: any) {
+      console.error("DNS guidance error:", error);
+      res.status(500).json({ error: "Failed to generate DNS guidance" });
     }
   });
 
