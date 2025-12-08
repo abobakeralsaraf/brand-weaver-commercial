@@ -116,6 +116,22 @@ export const typographySchema = z.object({
 export const aestheticLevelSchema = z.enum(["standard", "enhanced", "premium"]);
 export const languageSelectionSchema = z.enum(["english", "arabic", "both"]);
 
+export const portfolioProjectSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  image: z.string().optional(),
+  technologies: z.array(z.string()).default([]),
+  liveUrl: z.string().optional(),
+  sourceUrl: z.string().optional(),
+  featured: z.boolean().default(false),
+});
+
+export const analyticsConfigSchema = z.object({
+  googleAnalyticsId: z.string().optional(),
+  enableConsentBanner: z.boolean().default(true),
+});
+
 export const websiteConfigSchema = z.object({
   language: languageSelectionSchema,
   colorScheme: colorSchemeSchema,
@@ -123,6 +139,8 @@ export const websiteConfigSchema = z.object({
   aestheticLevel: aestheticLevelSchema,
   whatsappNumber: z.string().optional(),
   phoneNumber: z.string().optional(),
+  analytics: analyticsConfigSchema.optional(),
+  portfolioProjects: z.array(portfolioProjectSchema).default([]),
 });
 
 // Extraction Progress Types
@@ -180,6 +198,8 @@ export type ColorScheme = z.infer<typeof colorSchemeSchema>;
 export type Typography = z.infer<typeof typographySchema>;
 export type AestheticLevel = z.infer<typeof aestheticLevelSchema>;
 export type LanguageSelection = z.infer<typeof languageSelectionSchema>;
+export type PortfolioProject = z.infer<typeof portfolioProjectSchema>;
+export type AnalyticsConfig = z.infer<typeof analyticsConfigSchema>;
 export type WebsiteConfig = z.infer<typeof websiteConfigSchema>;
 export type ExtractionStep = z.infer<typeof extractionStepSchema>;
 export type ExtractionProgress = z.infer<typeof extractionProgressSchema>;

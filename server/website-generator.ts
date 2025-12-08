@@ -243,6 +243,13 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
   const aosEnabled = config.aestheticLevel !== "standard";
   const gsapEnabled = config.aestheticLevel === "premium";
   
+  // Portfolio projects from config
+  const portfolioProjects = config.portfolioProjects || [];
+  
+  // Google Analytics config
+  const gaId = config.analytics?.googleAnalyticsId;
+  const showConsentBanner = config.analytics?.enableConsentBanner !== false && gaId;
+  
   // Translations
   const t = {
     about: { en: "About Me", ar: "نبذة عني" },
@@ -252,8 +259,14 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
     certifications: { en: "Certifications", ar: "الشهادات" },
     recommendations: { en: "Recommendations", ar: "التوصيات" },
     featuredPosts: { en: "Featured Posts", ar: "المنشورات المميزة" },
+    portfolio: { en: "Portfolio", ar: "معرض الأعمال" },
+    viewProject: { en: "View Project", ar: "عرض المشروع" },
+    viewCode: { en: "View Code", ar: "عرض الكود" },
     present: { en: "Present", ar: "حتى الآن" },
     viewPost: { en: "View Post", ar: "عرض المنشور" },
+    cookieConsent: { en: "This website uses cookies for analytics.", ar: "يستخدم هذا الموقع ملفات تعريف الارتباط للتحليلات." },
+    accept: { en: "Accept", ar: "قبول" },
+    decline: { en: "Decline", ar: "رفض" },
   };
   
   const getText = (key: keyof typeof t) => {
@@ -292,6 +305,23 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
   ${aosEnabled ? '<!-- AOS Animation Library -->\n  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css">' : ''}
   
   ${featuredPosts.length > 0 ? '<!-- Swiper CSS -->\n  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">' : ''}
+  
+  ${gaId ? `<!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=${gaId}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    ${showConsentBanner ? `
+    // Wait for consent before tracking
+    if (localStorage.getItem('analytics-consent') === 'accepted') {
+      gtag('js', new Date());
+      gtag('config', '${gaId}', { anonymize_ip: true });
+    }
+    ` : `
+    gtag('js', new Date());
+    gtag('config', '${gaId}', { anonymize_ip: true });
+    `}
+  </script>` : ''}
   
   <style>
     :root {
@@ -734,6 +764,164 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
       background: #005e93;
     }
     
+    /* Portfolio Section */
+    .portfolio-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    
+    .portfolio-card {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      border: 1px solid #e5e7eb;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .portfolio-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+    }
+    
+    .portfolio-card-image {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
+    }
+    
+    .portfolio-card-content {
+      padding: 24px;
+    }
+    
+    .portfolio-card h4 {
+      font-size: 1.2rem;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+    
+    .portfolio-card p {
+      color: #4b5563;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    
+    .portfolio-tech {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .portfolio-tech span {
+      background: var(--accent);
+      color: var(--primary);
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+    
+    .portfolio-links {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .portfolio-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--primary);
+      color: white;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    
+    .portfolio-link:hover {
+      background: var(--secondary);
+    }
+    
+    .portfolio-link.secondary {
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
+    
+    .portfolio-link.secondary:hover {
+      background: var(--primary);
+      color: white;
+    }
+    
+    /* Cookie Consent Banner */
+    .cookie-banner {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #111827;
+      color: white;
+      padding: 16px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      z-index: 9999;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    }
+    
+    .cookie-banner.hidden {
+      display: none;
+    }
+    
+    .cookie-banner p {
+      margin: 0;
+      font-size: 0.95rem;
+    }
+    
+    .cookie-banner-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .cookie-btn {
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    
+    .cookie-btn.accept {
+      background: var(--primary);
+      color: white;
+    }
+    
+    .cookie-btn.accept:hover {
+      background: var(--secondary);
+    }
+    
+    .cookie-btn.decline {
+      background: transparent;
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    
+    .cookie-btn.decline:hover {
+      border-color: white;
+    }
+    
     /* Featured Posts Carousel */
     .posts-section {
       padding: 60px 0;
@@ -1090,6 +1278,46 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
   </section>
   ` : ''}
   
+  ${portfolioProjects.length > 0 ? `
+  <section id="portfolio">
+    <div class="container">
+      <h2 class="section-title"${aosEnabled ? ' data-aos="fade-up"' : ''}>${getText('portfolio')}</h2>
+      <div class="portfolio-grid">
+        ${portfolioProjects.map((project, idx) => `
+          <div class="portfolio-card"${aosEnabled ? ` data-aos="fade-up" data-aos-delay="${idx * 100}"` : ''}>
+            ${project.image 
+              ? `<img src="${project.image}" alt="${project.title}" class="portfolio-card-image">`
+              : `<div class="portfolio-card-image"></div>`
+            }
+            <div class="portfolio-card-content">
+              <h4>${project.title}</h4>
+              <p>${project.description}</p>
+              ${project.technologies.length > 0 ? `
+              <div class="portfolio-tech">
+                ${project.technologies.map(tech => `<span>${tech}</span>`).join('')}
+              </div>
+              ` : ''}
+              <div class="portfolio-links">
+                ${project.liveUrl ? `
+                <a href="${project.liveUrl}" target="_blank" rel="noopener" class="portfolio-link">
+                  ${getText('viewProject')}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+                </a>
+                ` : ''}
+                ${project.sourceUrl ? `
+                <a href="${project.sourceUrl}" target="_blank" rel="noopener" class="portfolio-link secondary">
+                  ${getText('viewCode')}
+                </a>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  </section>
+  ` : ''}
+  
   <footer>
     <p>&copy; ${new Date().getFullYear()} ${profile.fullName}. All rights reserved.</p>
     <p style="margin-top: 8px;">
@@ -1109,6 +1337,16 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"></path></svg>
     </a>
     ` : ''}
+  </div>
+  ` : ''}
+  
+  ${showConsentBanner ? `
+  <div id="cookie-banner" class="cookie-banner">
+    <p>${getText('cookieConsent')}</p>
+    <div class="cookie-banner-buttons">
+      <button class="cookie-btn accept" onclick="acceptCookies()">${getText('accept')}</button>
+      <button class="cookie-btn decline" onclick="declineCookies()">${getText('decline')}</button>
+    </div>
   </div>
   ` : ''}
   
@@ -1183,6 +1421,32 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
       // Reinitialize AOS for RTL
       ${aosEnabled ? "if (typeof AOS !== 'undefined') { AOS.refresh(); }" : ''}
     }
+    ` : ''}
+    
+    ${showConsentBanner ? `
+    // Cookie Consent Management
+    function acceptCookies() {
+      localStorage.setItem('analytics-consent', 'accepted');
+      document.getElementById('cookie-banner').classList.add('hidden');
+      // Initialize analytics after consent
+      if (typeof gtag !== 'undefined') {
+        gtag('js', new Date());
+        gtag('config', '${gaId}', { anonymize_ip: true });
+      }
+    }
+    
+    function declineCookies() {
+      localStorage.setItem('analytics-consent', 'declined');
+      document.getElementById('cookie-banner').classList.add('hidden');
+    }
+    
+    // Check if consent was already given
+    (function() {
+      const consent = localStorage.getItem('analytics-consent');
+      if (consent) {
+        document.getElementById('cookie-banner').classList.add('hidden');
+      }
+    })();
     ` : ''}
     
     ${gsapEnabled ? `

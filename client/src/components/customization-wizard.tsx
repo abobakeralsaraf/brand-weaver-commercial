@@ -40,6 +40,8 @@ export function CustomizationWizard({ onComplete, onBack }: CustomizationWizardP
     aestheticLevel: "enhanced",
     whatsappNumber: "",
     phoneNumber: "",
+    portfolioProjects: [],
+    analytics: undefined,
   });
 
   const handleNext = () => {
