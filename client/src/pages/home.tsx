@@ -10,6 +10,7 @@ import { DeploymentOptions } from "@/components/deployment-options";
 import { DeploymentProgress } from "@/components/deployment-progress";
 import { SuccessScreen } from "@/components/success-screen";
 import { SaveDataOptions } from "@/components/save-data-options";
+import { KpiDashboard } from "@/components/kpi-dashboard";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -88,7 +89,8 @@ export default function Home() {
   const extractMutation = useMutation({
     mutationFn: async (username: string) => {
       const response = await apiRequest("POST", "/api/extract", { username });
-      return response as unknown as ExtractedData;
+      const data = await response.json();
+      return data as ExtractedData;
     },
     onSuccess: (data) => {
       setExtractedData(data);
@@ -110,7 +112,8 @@ export default function Home() {
         data: extractedData,
         config,
       });
-      return response as unknown as { previewUrl: string; sessionId: string };
+      const result = await response.json();
+      return result as { previewUrl: string; sessionId: string };
     },
     onSuccess: (data) => {
       setPreviewUrl(data.previewUrl);
@@ -129,7 +132,8 @@ export default function Home() {
   const deployMutation = useMutation({
     mutationFn: async (options: DeploymentOptionsType) => {
       const response = await apiRequest("POST", "/api/deploy", options);
-      return response as { url: string };
+      const result = await response.json();
+      return result as { url: string };
     },
     onSuccess: (data) => {
       setWebsiteUrl(data.url);
@@ -309,12 +313,20 @@ export default function Home() {
 
     case "website-preview":
       return (
-        <WebsitePreview
-          previewUrl={previewUrl || "/api/preview"}
-          onDeploy={() => setCurrentStep("deploy-options")}
-          onChangeDesign={() => setCurrentStep("customize")}
-          isDeploying={deployMutation.isPending}
-        />
+        <div className="space-y-8">
+          <WebsitePreview
+            previewUrl={previewUrl || "/api/preview"}
+            onDeploy={() => setCurrentStep("deploy-options")}
+            onChangeDesign={() => setCurrentStep("customize")}
+            isDeploying={deployMutation.isPending}
+          />
+          <div className="max-w-6xl mx-auto px-4">
+            <KpiDashboard 
+              extractedData={extractedData} 
+              websiteConfig={websiteConfig} 
+            />
+          </div>
+        </div>
       );
 
     case "deploy-options":
