@@ -230,7 +230,23 @@ export function createPreviewHtml(): string {
 }
 
 function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
-  const { profile, experience, education, certifications, skills, recommendations, featuredPosts, languages } = data;
+  // Add defensive defaults for all data fields
+  const profile = data.profile ?? { 
+    fullName: "Your Name", 
+    headline: "", 
+    location: "", 
+    summary: "",
+    profilePicture: "",
+    headerImage: ""
+  };
+  const experience = data.experience ?? [];
+  const education = data.education ?? [];
+  const certifications = data.certifications ?? [];
+  const skills = data.skills ?? [];
+  const recommendations = data.recommendations ?? [];
+  const featuredPosts = data.featuredPosts ?? [];
+  const languages = data.languages ?? [];
+  
   const isRtl = config.language === "arabic";
   const isBilingual = config.language === "both";
   

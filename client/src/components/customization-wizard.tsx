@@ -7,6 +7,7 @@ import { ColorSchemeStep } from "./wizard/color-scheme-step";
 import { TypographyStep } from "./wizard/typography-step";
 import { AestheticStep } from "./wizard/aesthetic-step";
 import { ContactStep } from "./wizard/contact-step";
+import { PortfolioStep } from "./wizard/portfolio-step";
 import { WizardStepper } from "./wizard/wizard-stepper";
 import {
   COLOR_SCHEMES,
@@ -16,6 +17,7 @@ import {
   type ColorScheme,
   type Typography,
   type AestheticLevel,
+  type PortfolioProject,
 } from "@shared/schema";
 
 interface CustomizationWizardProps {
@@ -28,6 +30,7 @@ const WIZARD_STEPS = [
   { id: "colors", label: "Colors" },
   { id: "typography", label: "Typography" },
   { id: "aesthetic", label: "Aesthetic" },
+  { id: "portfolio", label: "Portfolio" },
   { id: "contact", label: "Contact" },
 ];
 
@@ -95,6 +98,13 @@ export function CustomizationWizard({ onComplete, onBack }: CustomizationWizardP
           />
         );
       case 4:
+        return (
+          <PortfolioStep
+            projects={config.portfolioProjects || []}
+            onChange={(v: PortfolioProject[]) => updateConfig("portfolioProjects", v)}
+          />
+        );
+      case 5:
         return (
           <ContactStep
             whatsappNumber={config.whatsappNumber || ""}

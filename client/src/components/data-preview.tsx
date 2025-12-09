@@ -12,39 +12,47 @@ interface DataPreviewProps {
 }
 
 export function DataPreview({ data, onSaveData, onCreateWebsite }: DataPreviewProps) {
+  const experienceCount = data.experience?.length ?? 0;
+  const educationCount = data.education?.length ?? 0;
+  const featuredPostsCount = data.featuredPosts?.length ?? 0;
+  const recommendationsCount = data.recommendations?.length ?? 0;
+  
   const stats = [
     {
       icon: Briefcase,
       label: "Work Experience",
-      value: data.experience.length,
-      suffix: data.experience.length === 1 ? "position" : "positions",
+      value: experienceCount,
+      suffix: experienceCount === 1 ? "position" : "positions",
     },
     {
       icon: GraduationCap,
       label: "Education",
-      value: data.education.length,
-      suffix: data.education.length === 1 ? "entry" : "entries",
+      value: educationCount,
+      suffix: educationCount === 1 ? "entry" : "entries",
     },
     {
       icon: FileText,
       label: "Featured Posts",
-      value: data.featuredPosts.length,
+      value: featuredPostsCount,
       suffix: `/ 6`,
     },
     {
       icon: MessageSquare,
       label: "Recommendations",
-      value: data.recommendations.length,
+      value: recommendationsCount,
       suffix: "total",
     },
   ];
 
-  const initials = data.profile.fullName
+  const initials = (data.profile?.fullName ?? "")
     .split(" ")
-    .map((n) => n[0])
+    .filter((n: string) => n.length > 0)
+    .map((n: string) => n[0])
     .join("")
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || "??";
+
+  const profile = data.profile ?? { fullName: "", headline: "", location: "", summary: "", profilePicture: "", headerImage: "" };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
@@ -53,25 +61,25 @@ export function DataPreview({ data, onSaveData, onCreateWebsite }: DataPreviewPr
           <CardHeader className="pb-4">
             <div className="flex flex-col sm:flex-row items-center gap-6">
               <Avatar className="w-24 h-24 border-4 border-background shadow-lg">
-                <AvatarImage src={data.profile.profilePicture} alt={data.profile.fullName} />
+                <AvatarImage src={profile.profilePicture} alt={profile.fullName} />
                 <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
               </Avatar>
               <div className="text-center sm:text-left space-y-2 flex-1">
-                <CardTitle className="text-2xl">{data.profile.fullName}</CardTitle>
-                {data.profile.headline && (
-                  <p className="text-muted-foreground">{data.profile.headline}</p>
+                <CardTitle className="text-2xl">{profile.fullName}</CardTitle>
+                {profile.headline && (
+                  <p className="text-muted-foreground">{profile.headline}</p>
                 )}
-                {data.profile.location && (
+                {profile.location && (
                   <Badge variant="secondary" className="text-xs">
-                    {data.profile.location}
+                    {profile.location}
                   </Badge>
                 )}
               </div>
-              {(data.profile.profilePicture || data.profile.headerImage) && (
+              {(profile.profilePicture || profile.headerImage) && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Image className="w-4 h-4" />
                   <span>
-                    {[data.profile.profilePicture, data.profile.headerImage].filter(Boolean).length} images
+                    {[profile.profilePicture, profile.headerImage].filter(Boolean).length} images
                   </span>
                   <Badge size="sm" variant="outline">WebP</Badge>
                 </div>
@@ -79,9 +87,9 @@ export function DataPreview({ data, onSaveData, onCreateWebsite }: DataPreviewPr
             </div>
           </CardHeader>
           <CardContent>
-            {data.profile.summary && (
+            {profile.summary && (
               <p className="text-sm text-muted-foreground line-clamp-3">
-                {data.profile.summary}
+                {profile.summary}
               </p>
             )}
           </CardContent>
