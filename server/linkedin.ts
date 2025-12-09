@@ -1,33 +1,71 @@
 import type { ExtractedData, WorkExperience, Education, Certification, Skill, Language, FeaturedPost, Recommendation } from "@shared/schema";
 
-// LinkedIn profile extraction service
-// In production, this would use the Fresh LinkedIn Profile Data API from RapidAPI
-// For development, we generate realistic sample data
+// LinkedIn profile extraction service using Fresh LinkedIn Profile Data API from RapidAPI
 
-export async function extractLinkedInProfile(username: string): Promise<ExtractedData> {
+export async function extractLinkedInProfile(linkedinUrlOrUsername: string): Promise<ExtractedData> {
   // Check for RapidAPI key
   const rapidApiKey = process.env.RAPIDAPI_KEY;
   
-  if (rapidApiKey) {
-    try {
-      return await fetchFromLinkedInApi(username, rapidApiKey);
-    } catch (error) {
-      console.error("LinkedIn API error, using sample data:", error);
-    }
+  if (!rapidApiKey) {
+    throw new Error("RAPIDAPI_KEY is not configured. Please add your RapidAPI key to extract LinkedIn profiles.");
   }
 
-  // Simulate extraction delay for realistic UX
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // Extract username from full LinkedIn URL or use as-is if already a username
+  const username = extractUsernameFromUrl(linkedinUrlOrUsername);
+  
+  if (!username) {
+    throw new Error("Invalid LinkedIn URL or username provided.");
+  }
 
-  // Return sample data for development/demo
-  return generateSampleData(username);
+  try {
+    return await fetchFromLinkedInApi(username, rapidApiKey);
+  } catch (error) {
+    console.error("LinkedIn API error:", error);
+    throw error;
+  }
+}
+
+// Extract username from LinkedIn URL (handles various formats)
+function extractUsernameFromUrl(input: string): string {
+  // Remove whitespace
+  const cleaned = input.trim();
+  
+  // If it's already just a username (no slashes or protocol), return it
+  if (!cleaned.includes('/') && !cleaned.includes('://')) {
+    return cleaned;
+  }
+  
+  // Try to extract from LinkedIn URL patterns
+  // Matches: linkedin.com/in/username, www.linkedin.com/in/username, https://linkedin.com/in/username
+  const patterns = [
+    /linkedin\.com\/in\/([^\/\?#]+)/i,
+    /linkedin\.com\/pub\/([^\/\?#]+)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = cleaned.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  // If no pattern matched but looks like a URL, extract last path segment
+  const urlMatch = cleaned.match(/\/([^\/\?#]+)\/?$/);
+  if (urlMatch && urlMatch[1]) {
+    return urlMatch[1];
+  }
+  
+  return cleaned;
 }
 
 async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<ExtractedData> {
   const fetchFn = globalThis.fetch;
   
+  // Build the LinkedIn URL for the API
+  const linkedinUrl = encodeURIComponent(`https://www.linkedin.com/in/${username}`);
+  
   const response = await fetchFn(
-    `https://fresh-linkedin-profile-data.p.rapidapi.com/get-linkedin-profile?linkedin_url=https://linkedin.com/in/${username}`,
+    `https://fresh-linkedin-profile-data.p.rapidapi.com/get-linkedin-profile?linkedin_url=${linkedinUrl}&include_skills=true`,
     {
       method: "GET",
       headers: {
@@ -38,73 +76,157 @@ async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<E
   );
 
   if (!response.ok) {
-    throw new Error(`LinkedIn API returned ${response.status}`);
+    const errorText = await response.text();
+    console.error("LinkedIn API error response:", errorText);
+    throw new Error(`LinkedIn API returned ${response.status}: ${errorText}`);
   }
 
-  const data = await response.json() as Record<string, unknown>;
-  return transformApiResponse(data);
+  const responseData = await response.json() as Record<string, unknown>;
+  
+  // API returns { success: boolean, data: {...} }
+  if (!responseData.success) {
+    throw new Error(`LinkedIn API request failed: ${responseData.message || 'Unknown error'}`);
+  }
+  
+  const profileData = responseData.data as Record<string, unknown>;
+  if (!profileData) {
+    throw new Error("LinkedIn API returned empty profile data");
+  }
+  
+  return transformApiResponse(profileData, username);
 }
 
-function transformApiResponse(apiData: any): ExtractedData {
-  // Transform API response to our schema
+function transformApiResponse(apiData: any, username: string): ExtractedData {
+  // Fresh LinkedIn API field mappings (based on actual API response schema)
+  // Fields: about, name/firstName/lastName, headline, location, experience, education, skills, certifications, etc.
+  
+  // Extract name - API may return 'name' or separate 'firstName'/'lastName'
+  const fullName = apiData.name || `${apiData.firstName || ''} ${apiData.lastName || ''}`.trim() || '';
+  const nameParts = fullName.split(' ');
+  const firstName = apiData.firstName || nameParts[0] || '';
+  const lastName = apiData.lastName || nameParts.slice(1).join(' ') || '';
+  
+  // Extract profile picture from various possible fields
+  const profilePicture = apiData.profile_picture || apiData.avatar || apiData.profilePicture || 
+    (apiData.logo && Array.isArray(apiData.logo) && apiData.logo[0]?.url) ||
+    (apiData.images && apiData.images.profile_images && apiData.images.profile_images[0]) || '';
+  
+  // Extract background image
+  const headerImage = apiData.background_cover_image_url || apiData.cover || 
+    (apiData.images && apiData.images.background_images && apiData.images.background_images[0]) || '';
+
+  // Extract location
+  const location = apiData.location || apiData.geoLocation || '';
+  
+  // Extract follower/connection count
+  const connections = apiData.follower_count || apiData.followers || apiData.connections || 0;
+
   return {
     profile: {
-      username: apiData.public_identifier || "",
-      firstName: apiData.first_name || "",
-      lastName: apiData.last_name || "",
-      fullName: `${apiData.first_name || ""} ${apiData.last_name || ""}`.trim(),
-      headline: apiData.headline || "",
-      summary: apiData.summary || "",
-      location: apiData.city || apiData.country || "",
-      profilePicture: apiData.profile_pic_url || "",
-      headerImage: apiData.background_cover_image_url || "",
-      linkedinUrl: `https://linkedin.com/in/${apiData.public_identifier}`,
-      connections: apiData.connections || 0,
+      username: apiData.username || apiData.vanityName || apiData.public_identifier || username,
+      firstName,
+      lastName,
+      fullName,
+      headline: apiData.headline || '',
+      summary: apiData.about || apiData.summary || '',
+      location: typeof location === 'string' ? location : (location?.name || location?.country || ''),
+      profilePicture,
+      headerImage,
+      linkedinUrl: `https://linkedin.com/in/${apiData.username || apiData.vanityName || username}`,
+      connections,
     },
-    experience: (apiData.experiences || []).map((exp: any, idx: number) => ({
-      id: `exp-${idx}`,
-      title: exp.title || "",
-      company: exp.company || "",
-      companyLogo: exp.company_linkedin_profile_url || "",
-      location: exp.location || "",
-      startDate: formatDate(exp.starts_at),
-      endDate: exp.ends_at ? formatDate(exp.ends_at) : undefined,
-      isCurrent: !exp.ends_at,
-      description: exp.description || "",
-    })),
-    education: (apiData.education || []).map((edu: any, idx: number) => ({
-      id: `edu-${idx}`,
-      school: edu.school || "",
-      degree: edu.degree_name || "",
-      fieldOfStudy: edu.field_of_study || "",
-      startDate: formatDate(edu.starts_at),
-      endDate: edu.ends_at ? formatDate(edu.ends_at) : undefined,
-    })),
-    certifications: (apiData.certifications || []).map((cert: any, idx: number) => ({
-      id: `cert-${idx}`,
-      name: cert.name || "",
-      issuer: cert.authority || "",
-      issueDate: formatDate(cert.starts_at),
-      credentialUrl: cert.url || "",
-    })),
-    skills: (apiData.skills || []).map((skill: string) => ({
-      name: skill,
-    })),
-    languages: (apiData.languages || []).map((lang: any) => ({
-      name: lang.name || lang,
-      proficiency: lang.proficiency || "",
-    })),
+    experience: transformExperience(apiData.experience || apiData.experiences || []),
+    education: transformEducation(apiData.education || []),
+    certifications: transformCertifications(apiData.certifications || []),
+    skills: transformSkills(apiData.skills || []),
+    languages: transformLanguages(apiData.languages || []),
     featuredPosts: extractFeaturedPosts(apiData),
-    recommendations: (apiData.recommendations || []).map((rec: any, idx: number) => ({
-      id: `rec-${idx}`,
-      recommenderName: rec.name || "Anonymous",
-      recommenderHeadline: rec.headline || "",
-      recommenderProfilePicture: rec.profile_pic_url || "",
-      recommenderLinkedInUrl: rec.linkedin_url || "",
-      text: rec.text || "",
-    })),
+    recommendations: transformRecommendations(apiData.recommendations || []),
     extractedAt: new Date().toISOString(),
   };
+}
+
+function transformExperience(experiences: any[]): WorkExperience[] {
+  if (!Array.isArray(experiences)) return [];
+  
+  return experiences.map((exp: any, idx: number) => ({
+    id: `exp-${idx}`,
+    title: exp.title || exp.position || '',
+    company: exp.company || exp.company_name || exp.companyName || '',
+    companyLogo: exp.company_logo || exp.companyLogo || exp.logo || '',
+    location: exp.location || '',
+    startDate: formatDate(exp.starts_at || exp.start_date || exp.startDate),
+    endDate: exp.ends_at || exp.end_date || exp.endDate ? formatDate(exp.ends_at || exp.end_date || exp.endDate) : undefined,
+    isCurrent: exp.is_current || !exp.ends_at && !exp.end_date && !exp.endDate,
+    description: exp.description || exp.summary || '',
+  }));
+}
+
+function transformEducation(education: any[]): Education[] {
+  if (!Array.isArray(education)) return [];
+  
+  return education.map((edu: any, idx: number) => ({
+    id: `edu-${idx}`,
+    school: edu.school || edu.school_name || edu.institution || '',
+    degree: edu.degree || edu.degree_name || '',
+    fieldOfStudy: edu.field_of_study || edu.fieldOfStudy || edu.major || '',
+    startDate: formatDate(edu.starts_at || edu.start_date || edu.startDate),
+    endDate: edu.ends_at || edu.end_date || edu.endDate ? formatDate(edu.ends_at || edu.end_date || edu.endDate) : undefined,
+  }));
+}
+
+function transformCertifications(certifications: any[]): Certification[] {
+  if (!Array.isArray(certifications)) return [];
+  
+  return certifications.map((cert: any, idx: number) => ({
+    id: `cert-${idx}`,
+    name: cert.name || cert.title || '',
+    issuer: cert.authority || cert.issuer || cert.organization || '',
+    issueDate: formatDate(cert.starts_at || cert.issue_date || cert.issueDate),
+    credentialUrl: cert.url || cert.credential_url || '',
+  }));
+}
+
+function transformSkills(skills: any[]): Skill[] {
+  if (!Array.isArray(skills)) return [];
+  
+  return skills.map((skill: any) => {
+    // Skills can be strings or objects
+    if (typeof skill === 'string') {
+      return { name: skill };
+    }
+    return {
+      name: skill.name || skill.skill || '',
+      endorsements: skill.endorsements || skill.endorsement_count || 0,
+    };
+  });
+}
+
+function transformLanguages(languages: any[]): Language[] {
+  if (!Array.isArray(languages)) return [];
+  
+  return languages.map((lang: any) => {
+    if (typeof lang === 'string') {
+      return { name: lang, proficiency: '' };
+    }
+    return {
+      name: lang.name || lang.language || '',
+      proficiency: lang.proficiency || lang.level || '',
+    };
+  });
+}
+
+function transformRecommendations(recommendations: any[]): Recommendation[] {
+  if (!Array.isArray(recommendations)) return [];
+  
+  return recommendations.map((rec: any, idx: number) => ({
+    id: `rec-${idx}`,
+    recommenderName: rec.name || rec.recommender_name || rec.author || 'Anonymous',
+    recommenderHeadline: rec.headline || rec.recommender_headline || rec.title || '',
+    recommenderProfilePicture: rec.profile_pic_url || rec.avatar || '',
+    recommenderLinkedInUrl: rec.linkedin_url || rec.profile_url || '',
+    text: rec.text || rec.recommendation || rec.content || '',
+  }));
 }
 
 function extractFeaturedPosts(apiData: any): any[] {
@@ -141,173 +263,3 @@ function formatDate(dateObj: any): string {
   return "";
 }
 
-function generateSampleData(username: string): ExtractedData {
-  const formattedName = username
-    .split(/[-_]/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-
-  const experience: WorkExperience[] = [
-    {
-      id: "exp-1",
-      title: "Senior Software Engineer",
-      company: "Tech Innovations Inc.",
-      location: "San Francisco, CA",
-      startDate: "2021-03",
-      isCurrent: true,
-      description: "Leading development of cloud-native applications and mentoring junior developers. Architecting scalable solutions using modern technologies.",
-    },
-    {
-      id: "exp-2",
-      title: "Software Engineer",
-      company: "Digital Solutions Corp",
-      location: "New York, NY",
-      startDate: "2018-06",
-      endDate: "2021-02",
-      isCurrent: false,
-      description: "Developed full-stack web applications using React and Node.js. Implemented CI/CD pipelines and improved code quality standards.",
-    },
-    {
-      id: "exp-3",
-      title: "Junior Developer",
-      company: "StartUp Labs",
-      location: "Boston, MA",
-      startDate: "2016-09",
-      endDate: "2018-05",
-      isCurrent: false,
-      description: "Built responsive web interfaces and contributed to backend API development. Collaborated with design team on UX improvements.",
-    },
-  ];
-
-  const education: Education[] = [
-    {
-      id: "edu-1",
-      school: "Massachusetts Institute of Technology",
-      degree: "Master of Science",
-      fieldOfStudy: "Computer Science",
-      startDate: "2014",
-      endDate: "2016",
-    },
-    {
-      id: "edu-2",
-      school: "University of California, Berkeley",
-      degree: "Bachelor of Science",
-      fieldOfStudy: "Computer Engineering",
-      startDate: "2010",
-      endDate: "2014",
-    },
-  ];
-
-  const certifications: Certification[] = [
-    {
-      id: "cert-1",
-      name: "AWS Solutions Architect Professional",
-      issuer: "Amazon Web Services",
-      issueDate: "2023-01",
-      credentialUrl: "https://aws.amazon.com/certification/",
-    },
-    {
-      id: "cert-2",
-      name: "Google Cloud Professional Developer",
-      issuer: "Google Cloud",
-      issueDate: "2022-06",
-      credentialUrl: "https://cloud.google.com/certification/",
-    },
-    {
-      id: "cert-3",
-      name: "Certified Kubernetes Administrator",
-      issuer: "Cloud Native Computing Foundation",
-      issueDate: "2022-03",
-    },
-  ];
-
-  const skills: Skill[] = [
-    { name: "JavaScript", endorsements: 42 },
-    { name: "TypeScript", endorsements: 38 },
-    { name: "React", endorsements: 35 },
-    { name: "Node.js", endorsements: 33 },
-    { name: "Python", endorsements: 28 },
-    { name: "AWS", endorsements: 25 },
-    { name: "Docker", endorsements: 22 },
-    { name: "Kubernetes", endorsements: 18 },
-    { name: "PostgreSQL", endorsements: 15 },
-    { name: "GraphQL", endorsements: 12 },
-  ];
-
-  const languages: Language[] = [
-    { name: "English", proficiency: "Native" },
-    { name: "Spanish", proficiency: "Professional" },
-    { name: "French", proficiency: "Conversational" },
-  ];
-
-  const featuredPosts: FeaturedPost[] = [
-    {
-      id: "post-1",
-      postUrl: "https://linkedin.com/posts/example-1",
-      contentPreview: "Excited to share our team's latest achievement in cloud architecture optimization...",
-      date: "2024-01-15",
-      engagement: { likes: 234, comments: 45, shares: 12 },
-    },
-    {
-      id: "post-2",
-      postUrl: "https://linkedin.com/posts/example-2",
-      contentPreview: "Key takeaways from the tech conference on AI and machine learning trends...",
-      date: "2023-11-20",
-      engagement: { likes: 189, comments: 32, shares: 8 },
-    },
-  ];
-
-  const recommendations: Recommendation[] = [
-    {
-      id: "rec-1",
-      recommenderName: "Sarah Johnson",
-      recommenderHeadline: "VP of Engineering at Tech Corp",
-      recommenderLinkedInUrl: "https://linkedin.com/in/sarahjohnson",
-      text: `${formattedName} is an exceptional engineer with a rare combination of technical expertise and leadership skills. Their ability to tackle complex problems while mentoring others makes them an invaluable team member.`,
-      relationship: "Managed directly",
-      date: "2023-08",
-    },
-    {
-      id: "rec-2",
-      recommenderName: "Michael Chen",
-      recommenderHeadline: "Senior Software Architect",
-      recommenderLinkedInUrl: "https://linkedin.com/in/michaelchen",
-      text: "Working with this professional has been a pleasure. Their code quality and attention to detail set a high standard for the entire team. Highly recommended for any technical leadership role.",
-      relationship: "Worked together",
-      date: "2023-05",
-    },
-    {
-      id: "rec-3",
-      recommenderName: "Emily Rodriguez",
-      recommenderHeadline: "Product Manager at Innovation Labs",
-      recommenderLinkedInUrl: "https://linkedin.com/in/emilyrodriguez",
-      text: "A true professional who consistently delivers high-quality work. Their communication skills and ability to translate technical concepts for non-technical stakeholders is remarkable.",
-      relationship: "Cross-functional collaboration",
-      date: "2022-12",
-    },
-  ];
-
-  return {
-    profile: {
-      username,
-      firstName: formattedName.split(" ")[0] || "John",
-      lastName: formattedName.split(" ").slice(1).join(" ") || "Doe",
-      fullName: formattedName || "John Doe",
-      headline: "Senior Software Engineer | Cloud Architecture | Full-Stack Development",
-      summary: `Passionate software engineer with 8+ years of experience building scalable web applications and cloud-native solutions. I specialize in React, Node.js, and AWS, with a focus on clean code and developer experience.\n\nCurrently leading development teams and architecting solutions that serve millions of users. I believe in continuous learning and sharing knowledge with the community.\n\nOpen to discussing new opportunities and collaborations.`,
-      location: "San Francisco Bay Area",
-      profilePicture: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face",
-      headerImage: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1920&h=600&fit=crop",
-      linkedinUrl: `https://linkedin.com/in/${username}`,
-      connections: 500,
-    },
-    experience,
-    education,
-    certifications,
-    skills,
-    languages,
-    featuredPosts,
-    recommendations,
-    extractedAt: new Date().toISOString(),
-  };
-}
