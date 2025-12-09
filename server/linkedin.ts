@@ -65,49 +65,82 @@ function extractUsernameFromUrl(input: string): string {
 
 async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<ExtractedData> {
   const fetchFn = globalThis.fetch;
-  
-  // Fresh LinkedIn Scraper API - correct endpoint
-  const response = await fetchFn(
-    `https://fresh-linkedin-scraper-api.p.rapidapi.com/api/v1/user/profile?username=${encodeURIComponent(username)}`,
-    {
-      method: "GET",
-      headers: {
-        "x-rapidapi-key": apiKey,
-        "x-rapidapi-host": "fresh-linkedin-scraper-api.p.rapidapi.com",
-      },
-    }
+  const baseUrl = "https://fresh-linkedin-scraper-api.p.rapidapi.com/api/v1/user";
+  const headers = {
+    "x-rapidapi-key": apiKey,
+    "x-rapidapi-host": "fresh-linkedin-scraper-api.p.rapidapi.com",
+  };
+
+  // Fetch profile data (required)
+  const profileResponse = await fetchFn(
+    `${baseUrl}/profile?username=${encodeURIComponent(username)}`,
+    { method: "GET", headers }
   );
 
-  if (!response.ok) {
-    const errorText = await response.text();
+  if (!profileResponse.ok) {
+    const errorText = await profileResponse.text();
     console.error("LinkedIn API error response:", errorText);
-    throw new Error(`LinkedIn API returned ${response.status}: ${errorText}`);
+    throw new Error(`LinkedIn API returned ${profileResponse.status}: ${errorText}`);
   }
 
-  const responseData = await response.json() as Record<string, unknown>;
-  
-  // API returns { success/status: boolean, data: {...} }
-  if (responseData.success === false || responseData.status === 'error') {
-    throw new Error(`LinkedIn API request failed: ${responseData.message || 'Unknown error'}`);
+  const profileResult = await profileResponse.json() as Record<string, unknown>;
+  if (profileResult.success === false || profileResult.status === 'error') {
+    throw new Error(`LinkedIn API request failed: ${profileResult.message || 'Unknown error'}`);
   }
   
-  const profileData = responseData.data as Record<string, unknown>;
+  const profileData = profileResult.data as Record<string, unknown>;
   if (!profileData) {
     throw new Error("LinkedIn API returned empty profile data");
   }
-  
-  return transformApiResponse(profileData, username);
+
+  // Fetch additional data in parallel (experience, skills, certifications, recommendations)
+  const [experienceResult, skillsResult, certificationsResult, recommendationsResult] = await Promise.all([
+    fetchApiEndpoint(`${baseUrl}/experience?username=${encodeURIComponent(username)}`, headers),
+    fetchApiEndpoint(`${baseUrl}/skills?username=${encodeURIComponent(username)}`, headers),
+    fetchApiEndpoint(`${baseUrl}/certifications?username=${encodeURIComponent(username)}`, headers),
+    fetchApiEndpoint(`${baseUrl}/recommendations?username=${encodeURIComponent(username)}`, headers),
+  ]);
+
+  console.log(`[LinkedIn API] Profile: ${profileData.full_name || profileData.first_name}`);
+  console.log(`[LinkedIn API] Experience: ${experienceResult?.length || 0} items`);
+  console.log(`[LinkedIn API] Skills: ${skillsResult?.length || 0} items`);
+  console.log(`[LinkedIn API] Certifications: ${certificationsResult?.length || 0} items`);
+  console.log(`[LinkedIn API] Recommendations: ${recommendationsResult?.length || 0} items`);
+
+  return transformApiResponse(profileData, username, {
+    experience: experienceResult || [],
+    skills: skillsResult || [],
+    certifications: certificationsResult || [],
+    recommendations: recommendationsResult || [],
+  });
 }
 
-function transformApiResponse(apiData: any, username: string): ExtractedData {
-  // Fresh LinkedIn API field mappings (based on actual API response schema)
-  // Fields: about, name/firstName/lastName, headline, location, experience, education, skills, certifications, etc.
+async function fetchApiEndpoint(url: string, headers: Record<string, string>): Promise<any[] | null> {
+  try {
+    const response = await globalThis.fetch(url, { method: "GET", headers });
+    if (!response.ok) return null;
+    const result = await response.json() as Record<string, unknown>;
+    return (result.data as any[]) || null;
+  } catch (error) {
+    console.error(`API endpoint error for ${url}:`, error);
+    return null;
+  }
+}
+
+interface AdditionalData {
+  experience: any[];
+  skills: any[];
+  certifications: any[];
+  recommendations: any[];
+}
+
+function transformApiResponse(apiData: any, username: string, additionalData: AdditionalData): ExtractedData {
+  // Fresh LinkedIn Scraper API field mappings
   
-  // Extract name - API may return 'name' or separate 'firstName'/'lastName'
-  const fullName = apiData.name || `${apiData.firstName || ''} ${apiData.lastName || ''}`.trim() || '';
-  const nameParts = fullName.split(' ');
-  const firstName = apiData.firstName || nameParts[0] || '';
-  const lastName = apiData.lastName || nameParts.slice(1).join(' ') || '';
+  // Extract name - API returns first_name, last_name, full_name
+  const fullName = apiData.full_name || `${apiData.first_name || ''} ${apiData.last_name || ''}`.trim() || '';
+  const firstName = apiData.first_name || '';
+  const lastName = apiData.last_name || '';
   
   // Extract profile picture from various possible fields
   const profilePicture = apiData.profile_picture || apiData.avatar || apiData.profilePicture || 
@@ -124,6 +157,12 @@ function transformApiResponse(apiData: any, username: string): ExtractedData {
   // Extract follower/connection count
   const connections = apiData.follower_count || apiData.followers || apiData.connections || 0;
 
+  // Use additionalData from separate API calls, fall back to apiData fields if present
+  const experienceData = additionalData.experience.length > 0 ? additionalData.experience : (apiData.experience || apiData.experiences || []);
+  const skillsData = additionalData.skills.length > 0 ? additionalData.skills : (apiData.skills || []);
+  const certificationsData = additionalData.certifications.length > 0 ? additionalData.certifications : (apiData.certifications || []);
+  const recommendationsData = additionalData.recommendations.length > 0 ? additionalData.recommendations : (apiData.recommendations || []);
+
   return {
     profile: {
       username: apiData.username || apiData.vanityName || apiData.public_identifier || username,
@@ -132,19 +171,19 @@ function transformApiResponse(apiData: any, username: string): ExtractedData {
       fullName,
       headline: apiData.headline || '',
       summary: apiData.about || apiData.summary || '',
-      location: typeof location === 'string' ? location : (location?.name || location?.country || ''),
+      location: typeof location === 'string' ? location : (location?.city || location?.country || ''),
       profilePicture,
       headerImage,
-      linkedinUrl: `https://linkedin.com/in/${apiData.username || apiData.vanityName || username}`,
+      linkedinUrl: `https://linkedin.com/in/${apiData.public_identifier || apiData.username || username}`,
       connections,
     },
-    experience: transformExperience(apiData.experience || apiData.experiences || []),
+    experience: transformExperience(experienceData),
     education: transformEducation(apiData.education || []),
-    certifications: transformCertifications(apiData.certifications || []),
-    skills: transformSkills(apiData.skills || []),
+    certifications: transformCertifications(certificationsData),
+    skills: transformSkills(skillsData),
     languages: transformLanguages(apiData.languages || []),
     featuredPosts: extractFeaturedPosts(apiData),
-    recommendations: transformRecommendations(apiData.recommendations || []),
+    recommendations: transformRecommendations(recommendationsData),
     extractedAt: new Date().toISOString(),
   };
 }
@@ -152,17 +191,34 @@ function transformApiResponse(apiData: any, username: string): ExtractedData {
 function transformExperience(experiences: any[]): WorkExperience[] {
   if (!Array.isArray(experiences)) return [];
   
-  return experiences.map((exp: any, idx: number) => ({
-    id: `exp-${idx}`,
-    title: exp.title || exp.position || '',
-    company: exp.company || exp.company_name || exp.companyName || '',
-    companyLogo: exp.company_logo || exp.companyLogo || exp.logo || '',
-    location: exp.location || '',
-    startDate: formatDate(exp.starts_at || exp.start_date || exp.startDate),
-    endDate: exp.ends_at || exp.end_date || exp.endDate ? formatDate(exp.ends_at || exp.end_date || exp.endDate) : undefined,
-    isCurrent: exp.is_current || !exp.ends_at && !exp.end_date && !exp.endDate,
-    description: exp.description || exp.summary || '',
-  }));
+  return experiences.map((exp: any, idx: number) => {
+    // Handle date from API format: { start: "Jan 2018", end: "Present" }
+    const dateInfo = exp.date || {};
+    const startDate = dateInfo.start || formatDate(exp.starts_at || exp.start_date || exp.startDate);
+    const endDateRaw = dateInfo.end || exp.ends_at || exp.end_date || exp.endDate;
+    const isCurrent = endDateRaw === 'Present' || exp.is_current || !endDateRaw;
+    const endDate = isCurrent ? undefined : (typeof endDateRaw === 'string' ? endDateRaw : formatDate(endDateRaw));
+    
+    // Get company logo - API returns company.logo array
+    let companyLogo = '';
+    if (exp.company?.logo && Array.isArray(exp.company.logo) && exp.company.logo.length > 0) {
+      companyLogo = exp.company.logo[0]?.url || '';
+    } else {
+      companyLogo = exp.company_logo || exp.companyLogo || '';
+    }
+    
+    return {
+      id: `exp-${idx}`,
+      title: exp.title || exp.position || '',
+      company: exp.company?.name || exp.company || exp.company_name || exp.companyName || '',
+      companyLogo,
+      location: exp.location || '',
+      startDate,
+      endDate,
+      isCurrent,
+      description: exp.description || exp.summary || '',
+    };
+  });
 }
 
 function transformEducation(education: any[]): Education[] {
@@ -222,14 +278,27 @@ function transformLanguages(languages: any[]): Language[] {
 function transformRecommendations(recommendations: any[]): Recommendation[] {
   if (!Array.isArray(recommendations)) return [];
   
-  return recommendations.map((rec: any, idx: number) => ({
-    id: `rec-${idx}`,
-    recommenderName: rec.name || rec.recommender_name || rec.author || 'Anonymous',
-    recommenderHeadline: rec.headline || rec.recommender_headline || rec.title || '',
-    recommenderProfilePicture: rec.profile_pic_url || rec.avatar || '',
-    recommenderLinkedInUrl: rec.linkedin_url || rec.profile_url || '',
-    text: rec.text || rec.recommendation || rec.content || '',
-  }));
+  return recommendations.map((rec: any, idx: number) => {
+    // API returns recommender object with full_name, description, avatar, url
+    const recommender = rec.recommender || {};
+    
+    // Get recommender avatar - API returns avatar array
+    let recommenderPicture = '';
+    if (recommender.avatar && Array.isArray(recommender.avatar) && recommender.avatar.length > 0) {
+      recommenderPicture = recommender.avatar[0]?.url || '';
+    } else {
+      recommenderPicture = rec.profile_pic_url || rec.avatar || '';
+    }
+    
+    return {
+      id: `rec-${idx}`,
+      recommenderName: recommender.full_name || rec.name || rec.recommender_name || rec.author || 'Anonymous',
+      recommenderHeadline: recommender.description || rec.headline || rec.recommender_headline || rec.title || '',
+      recommenderProfilePicture: recommenderPicture,
+      recommenderLinkedInUrl: recommender.url || rec.linkedin_url || rec.profile_url || '',
+      text: rec.text || rec.recommendation || rec.content || '',
+    };
+  });
 }
 
 function extractFeaturedPosts(apiData: any): any[] {
