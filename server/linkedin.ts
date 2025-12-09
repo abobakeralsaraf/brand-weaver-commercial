@@ -94,7 +94,7 @@ function transformApiResponse(apiData: any): ExtractedData {
       name: lang.name || lang,
       proficiency: lang.proficiency || "",
     })),
-    featuredPosts: [],
+    featuredPosts: extractFeaturedPosts(apiData),
     recommendations: (apiData.recommendations || []).map((rec: any, idx: number) => ({
       id: `rec-${idx}`,
       recommenderName: rec.name || "Anonymous",
@@ -105,6 +105,30 @@ function transformApiResponse(apiData: any): ExtractedData {
     })),
     extractedAt: new Date().toISOString(),
   };
+}
+
+function extractFeaturedPosts(apiData: any): any[] {
+  // Try different field names that LinkedIn API might use for posts/articles
+  const possibleFields = ['articles', 'posts', 'featured', 'activities', 'publications'];
+  
+  for (const field of possibleFields) {
+    if (apiData[field] && Array.isArray(apiData[field]) && apiData[field].length > 0) {
+      return apiData[field].map((post: any, idx: number) => ({
+        id: `post-${idx}`,
+        postUrl: post.url || post.link || post.article_link || `https://linkedin.com/posts/${idx}`,
+        contentPreview: post.title || post.description || post.text || post.content || "Featured content",
+        date: formatDate(post.published_on) || formatDate(post.date) || new Date().toISOString().split('T')[0],
+        engagement: {
+          likes: post.likes || post.num_likes || 0,
+          comments: post.comments || post.num_comments || 0,
+          shares: post.shares || post.num_shares || 0,
+        },
+        imageUrl: post.image_url || post.cover_image || post.thumbnail || "",
+      }));
+    }
+  }
+  
+  return [];
 }
 
 function formatDate(dateObj: any): string {

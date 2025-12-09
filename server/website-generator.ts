@@ -80,15 +80,40 @@ export function createPreviewHtml(data?: any, config?: any): string {
       },
     ],
     skills: [
-      { name: "Skill 1" },
-      { name: "Skill 2" },
-      { name: "Skill 3" },
-      { name: "Skill 4" },
-      { name: "Skill 5" },
+      { name: "JavaScript", endorsements: 45 },
+      { name: "React", endorsements: 38 },
+      { name: "Node.js", endorsements: 32 },
+      { name: "TypeScript", endorsements: 28 },
+      { name: "Python", endorsements: 25 },
     ],
     languages: [{ name: "English", proficiency: "Native" }],
-    featuredPosts: [],
-    recommendations: [],
+    featuredPosts: [
+      {
+        id: "post-1",
+        postUrl: "https://linkedin.com/posts/sample-1",
+        contentPreview: "Excited to share insights on building scalable web applications with modern technologies...",
+        date: "2024-01-15",
+        engagement: { likes: 234, comments: 45, shares: 12 },
+      },
+      {
+        id: "post-2",
+        postUrl: "https://linkedin.com/posts/sample-2",
+        contentPreview: "Key takeaways from the tech conference on cloud architecture and DevOps best practices...",
+        date: "2023-11-20",
+        engagement: { likes: 189, comments: 32, shares: 8 },
+      },
+    ],
+    recommendations: [
+      {
+        id: "rec-1",
+        recommenderName: "Sample Recommender",
+        recommenderHeadline: "VP of Engineering",
+        recommenderLinkedInUrl: "https://linkedin.com/in/sample",
+        text: "An exceptional professional with outstanding technical skills and leadership abilities.",
+        relationship: "Worked together",
+        date: "2023-08",
+      },
+    ],
     extractedAt: new Date().toISOString(),
   };
 
@@ -108,8 +133,8 @@ export function createPreviewHtml(data?: any, config?: any): string {
       bodyFont: "Roboto",
     },
     aestheticLevel: "enhanced" as const,
-    whatsappNumber: "",
-    phoneNumber: "",
+    whatsappNumber: "+1234567890",
+    phoneNumber: "+1234567890",
     portfolioProjects: [],
   };
 

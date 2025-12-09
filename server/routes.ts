@@ -98,12 +98,21 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Data and config are required" });
       }
 
+      console.log("[Generate] Profile:", data.profile?.fullName);
+      console.log("[Generate] Featured posts:", data.featuredPosts?.length || 0);
+      console.log("[Generate] Experience:", data.experience?.length || 0);
+      console.log("[Generate] WhatsApp:", config.whatsappNumber ? "set" : "not set");
+      console.log("[Generate] Phone:", config.phoneNumber ? "set" : "not set");
+
       const sessionId = await storage.createSession();
       await storage.saveExtractedData(sessionId, data);
       await storage.saveWebsiteConfig(sessionId, config);
 
       const generatedFiles = await generateWebsite(data, config);
       await storage.saveGeneratedWebsite(sessionId, generatedFiles);
+
+      console.log("[Generate] Session created:", sessionId);
+      console.log("[Generate] Files generated:", generatedFiles.size);
 
       res.json({ 
         previewUrl: `/api/preview?session=${sessionId}`,
@@ -121,16 +130,21 @@ export async function registerRoutes(
   app.get("/api/preview", async (req: Request, res: Response) => {
     try {
       const sessionId = req.query.session as string;
+      console.log("[Preview] Session ID:", sessionId);
       
       if (sessionId) {
         const files = await storage.getGeneratedWebsite(sessionId);
+        console.log("[Preview] Files found:", files ? files.size : 0);
         if (files && files.has("index.html")) {
+          const html = files.get("index.html")!;
+          console.log("[Preview] Serving generated HTML, length:", html.length);
           res.setHeader("Content-Type", "text/html");
-          return res.send(files.get("index.html"));
+          return res.send(html);
         }
       }
 
-      // Return a sample preview
+      // Return a sample preview with featured posts
+      console.log("[Preview] No session found, serving sample preview");
       const sampleHtml = createPreviewHtml();
       res.setHeader("Content-Type", "text/html");
       res.send(sampleHtml);
