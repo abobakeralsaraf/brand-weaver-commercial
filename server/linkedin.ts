@@ -142,14 +142,24 @@ function transformApiResponse(apiData: any, username: string, additionalData: Ad
   const firstName = apiData.first_name || '';
   const lastName = apiData.last_name || '';
   
-  // Extract profile picture from various possible fields
-  const profilePicture = apiData.profile_picture || apiData.avatar || apiData.profilePicture || 
-    (apiData.logo && Array.isArray(apiData.logo) && apiData.logo[0]?.url) ||
-    (apiData.images && apiData.images.profile_images && apiData.images.profile_images[0]) || '';
+  // Extract profile picture - API returns avatar as array of image objects
+  let profilePicture = '';
+  if (apiData.avatar && Array.isArray(apiData.avatar) && apiData.avatar.length > 0) {
+    // Get the highest resolution image (last in array)
+    profilePicture = apiData.avatar[apiData.avatar.length - 1]?.url || apiData.avatar[0]?.url || '';
+  } else if (typeof apiData.avatar === 'string') {
+    profilePicture = apiData.avatar;
+  } else if (apiData.profile_picture) {
+    profilePicture = typeof apiData.profile_picture === 'string' ? apiData.profile_picture : '';
+  }
   
-  // Extract background image
-  const headerImage = apiData.background_cover_image_url || apiData.cover || 
-    (apiData.images && apiData.images.background_images && apiData.images.background_images[0]) || '';
+  // Extract background image - API returns background_cover_image_url as array
+  let headerImage = '';
+  if (apiData.background_cover_image_url && Array.isArray(apiData.background_cover_image_url) && apiData.background_cover_image_url.length > 0) {
+    headerImage = apiData.background_cover_image_url[apiData.background_cover_image_url.length - 1]?.url || apiData.background_cover_image_url[0]?.url || '';
+  } else if (typeof apiData.background_cover_image_url === 'string') {
+    headerImage = apiData.background_cover_image_url;
+  }
 
   // Extract location
   const location = apiData.location || apiData.geoLocation || '';
