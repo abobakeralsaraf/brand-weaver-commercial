@@ -13,6 +13,8 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### December 2024
+- **Fixed complete profile data**: Updated `createPreviewHtml()` sample data to include all 10 skills, 3 certifications, 3 recommendations, 3 experience entries, 2 education entries
+- **Fixed JSON parsing bug**: All mutations (extract, generate, deploy) now properly call `.json()` on Response objects
 - **Fixed critical preview bug**: `createPreviewHtml()` now uses the actual `generateIndexHtml()` function instead of hardcoded mock data
 - **Improved website preview**: Responsive scaling with CSS transforms for accurate device previews
 - Added 6-step customization wizard: Language, Colors, Typography, Aesthetic, Portfolio, Contact
