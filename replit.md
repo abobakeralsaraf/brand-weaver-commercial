@@ -13,6 +13,8 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### December 2024
+- **Fixed critical preview bug**: `createPreviewHtml()` now uses the actual `generateIndexHtml()` function instead of hardcoded mock data
+- **Improved website preview**: Responsive scaling with CSS transforms for accurate device previews
 - Added 6-step customization wizard: Language, Colors, Typography, Aesthetic, Portfolio, Contact
 - Implemented Portfolio step allowing users to add custom projects
 - Added Vercel as third deployment platform alongside GitHub Pages and Netlify
