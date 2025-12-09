@@ -66,16 +66,14 @@ function extractUsernameFromUrl(input: string): string {
 async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<ExtractedData> {
   const fetchFn = globalThis.fetch;
   
-  // Build the LinkedIn URL for the API
-  const linkedinUrl = encodeURIComponent(`https://www.linkedin.com/in/${username}`);
-  
+  // Fresh LinkedIn Scraper API - correct endpoint
   const response = await fetchFn(
-    `https://fresh-linkedin-profile-data.p.rapidapi.com/get-linkedin-profile?linkedin_url=${linkedinUrl}&include_skills=true`,
+    `https://fresh-linkedin-scraper-api.p.rapidapi.com/api/v1/user/profile?username=${encodeURIComponent(username)}`,
     {
       method: "GET",
       headers: {
         "x-rapidapi-key": apiKey,
-        "x-rapidapi-host": "fresh-linkedin-profile-data.p.rapidapi.com",
+        "x-rapidapi-host": "fresh-linkedin-scraper-api.p.rapidapi.com",
       },
     }
   );
@@ -88,8 +86,8 @@ async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<E
 
   const responseData = await response.json() as Record<string, unknown>;
   
-  // API returns { success: boolean, data: {...} }
-  if (!responseData.success) {
+  // API returns { success/status: boolean, data: {...} }
+  if (responseData.success === false || responseData.status === 'error') {
     throw new Error(`LinkedIn API request failed: ${responseData.message || 'Unknown error'}`);
   }
   
