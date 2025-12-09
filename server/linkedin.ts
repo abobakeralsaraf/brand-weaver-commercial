@@ -30,16 +30,26 @@ function extractUsernameFromUrl(input: string): string {
   // Remove whitespace
   const cleaned = input.trim();
   
-  // If it's already just a username (no slashes or protocol), return it
+  if (!cleaned) {
+    throw new Error("LinkedIn URL or username is required");
+  }
+  
+  // If it's already just a username (no slashes or protocol), validate it
+  // Valid usernames are alphanumeric with hyphens and underscores, no special chars
   if (!cleaned.includes('/') && !cleaned.includes('://')) {
-    return cleaned;
+    // Validate username format
+    if (/^[a-zA-Z0-9\-_]+$/.test(cleaned)) {
+      return cleaned;
+    }
+    throw new Error(`Invalid LinkedIn username format: ${cleaned}`);
   }
   
   // Try to extract from LinkedIn URL patterns
   // Matches: linkedin.com/in/username, www.linkedin.com/in/username, https://linkedin.com/in/username
+  // Also handles locale segments: linkedin.com/in/username/en
   const patterns = [
-    /linkedin\.com\/in\/([^\/\?#]+)/i,
-    /linkedin\.com\/pub\/([^\/\?#]+)/i,
+    /linkedin\.com\/in\/([a-zA-Z0-9\-_]+)/i,
+    /linkedin\.com\/pub\/([a-zA-Z0-9\-_]+)/i,
   ];
   
   for (const pattern of patterns) {
@@ -49,13 +59,8 @@ function extractUsernameFromUrl(input: string): string {
     }
   }
   
-  // If no pattern matched but looks like a URL, extract last path segment
-  const urlMatch = cleaned.match(/\/([^\/\?#]+)\/?$/);
-  if (urlMatch && urlMatch[1]) {
-    return urlMatch[1];
-  }
-  
-  return cleaned;
+  // No valid LinkedIn profile URL pattern found
+  throw new Error(`Invalid LinkedIn profile URL. Please use format: linkedin.com/in/username or just the username`);
 }
 
 async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<ExtractedData> {
