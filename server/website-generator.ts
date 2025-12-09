@@ -29,204 +29,91 @@ export async function generateWebsite(
   return files;
 }
 
-export function createPreviewHtml(): string {
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Website Preview</title>
-  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .hero {
-      padding: 80px 20px;
-      text-align: center;
-      color: white;
-    }
-    .hero h1 {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      font-weight: 700;
-    }
-    .hero p {
-      font-size: 1.25rem;
-      opacity: 0.9;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    .profile-img {
-      width: 150px;
-      height: 150px;
-      border-radius: 50%;
-      border: 4px solid white;
-      margin: 0 auto 2rem;
-      background: rgba(255,255,255,0.2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 3rem;
-    }
-    .sections {
-      background: white;
-      flex: 1;
-      padding: 60px 20px;
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    .section {
-      margin-bottom: 40px;
-    }
-    .section h2 {
-      font-size: 1.5rem;
-      color: #1e40af;
-      margin-bottom: 1rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 2px solid #e5e7eb;
-    }
-    .card {
-      background: #f9fafb;
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 16px;
-    }
-    .card h3 {
-      font-size: 1.1rem;
-      color: #111827;
-      margin-bottom: 0.5rem;
-    }
-    .card p {
-      color: #6b7280;
-      font-size: 0.9rem;
-    }
-    .skills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .skill {
-      background: #dbeafe;
-      color: #1e40af;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-    }
-    .floating-buttons {
-      position: fixed;
-      bottom: 30px;
-      right: 30px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      z-index: 1000;
-    }
-    .floating-btn {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 1.5rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      cursor: pointer;
-      transition: transform 0.2s;
-      text-decoration: none;
-    }
-    .floating-btn:hover {
-      transform: translateY(-3px) scale(1.05);
-    }
-    .whatsapp { background: #25D366; }
-    .phone { background: #1e40af; }
-    .lang-switcher {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      display: flex;
-      gap: 8px;
-      z-index: 1000;
-    }
-    .lang-btn {
-      padding: 8px 16px;
-      border-radius: 20px;
-      background: rgba(255,255,255,0.2);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.3);
-      cursor: pointer;
-      font-size: 0.9rem;
-      transition: all 0.3s;
-    }
-    .lang-btn.active {
-      background: white;
-      color: #1e40af;
-    }
-  </style>
-</head>
-<body>
-  <div class="lang-switcher">
-    <button class="lang-btn active">EN</button>
-    <button class="lang-btn">AR</button>
-  </div>
-  <div class="hero">
-    <div class="profile-img" data-aos="zoom-in">JD</div>
-    <h1 data-aos="fade-up">John Doe</h1>
-    <p data-aos="fade-up" data-aos-delay="100">Senior Software Engineer | Cloud Architecture | Full-Stack Development</p>
-  </div>
-  <div class="sections">
-    <div class="container">
-      <div class="section" data-aos="fade-up">
-        <h2>About</h2>
-        <p style="color: #4b5563; line-height: 1.7;">
-          Passionate software engineer with 8+ years of experience building scalable 
-          web applications and cloud-native solutions. I specialize in React, Node.js, 
-          and AWS, with a focus on clean code and developer experience.
-        </p>
-      </div>
-      <div class="section" data-aos="fade-up">
-        <h2>Experience</h2>
-        <div class="card">
-          <h3>Senior Software Engineer</h3>
-          <p>Tech Innovations Inc. | 2021 - Present</p>
-        </div>
-        <div class="card">
-          <h3>Software Engineer</h3>
-          <p>Digital Solutions Corp | 2018 - 2021</p>
-        </div>
-      </div>
-      <div class="section" data-aos="fade-up">
-        <h2>Skills</h2>
-        <div class="skills">
-          <span class="skill">JavaScript</span>
-          <span class="skill">TypeScript</span>
-          <span class="skill">React</span>
-          <span class="skill">Node.js</span>
-          <span class="skill">AWS</span>
-          <span class="skill">Docker</span>
-          <span class="skill">PostgreSQL</span>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="floating-buttons">
-    <a href="https://wa.me/1234567890" class="floating-btn whatsapp">W</a>
-    <a href="tel:+1234567890" class="floating-btn phone">P</a>
-  </div>
-  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-  <script>AOS.init({ duration: 800, once: true });</script>
-</body>
-</html>
-  `.trim();
+export function createPreviewHtml(data?: any, config?: any): string {
+  // If we have actual data, use the full generator
+  if (data && config) {
+    return generateIndexHtml(data, config);
+  }
+  
+  // Generate a sample preview using full generator with sample data
+  const sampleData = {
+    profile: {
+      username: "sample-user",
+      firstName: "Your",
+      lastName: "Name",
+      fullName: "Your Name",
+      headline: "Your Professional Headline Here",
+      summary: "Enter your LinkedIn profile URL to extract your data and generate a professional personal brand website. Your summary, experience, education, skills, certifications, and recommendations will be displayed here.",
+      location: "Your Location",
+      profilePicture: "",
+      headerImage: "",
+      linkedinUrl: "https://linkedin.com/in/sample",
+      connections: 500,
+    },
+    experience: [
+      {
+        id: "exp-1",
+        title: "Your Current Role",
+        company: "Your Company",
+        location: "Location",
+        startDate: "2020-01",
+        isCurrent: true,
+        description: "Your work experience will appear here after extracting your LinkedIn profile.",
+      },
+    ],
+    education: [
+      {
+        id: "edu-1",
+        school: "Your University",
+        degree: "Your Degree",
+        fieldOfStudy: "Field of Study",
+        startDate: "2015",
+        endDate: "2019",
+      },
+    ],
+    certifications: [
+      {
+        id: "cert-1",
+        name: "Your Certification",
+        issuer: "Certification Authority",
+        issueDate: "2023-01",
+      },
+    ],
+    skills: [
+      { name: "Skill 1" },
+      { name: "Skill 2" },
+      { name: "Skill 3" },
+      { name: "Skill 4" },
+      { name: "Skill 5" },
+    ],
+    languages: [{ name: "English", proficiency: "Native" }],
+    featuredPosts: [],
+    recommendations: [],
+    extractedAt: new Date().toISOString(),
+  };
+
+  const sampleConfig = {
+    language: "english" as const,
+    colorScheme: {
+      id: "modern-blue",
+      name: "Modern Blue",
+      primary: "#2563eb",
+      secondary: "#1e40af",
+      accent: "#60a5fa",
+    },
+    typography: {
+      id: "modern-professional",
+      name: "Modern Professional",
+      headingFont: "Inter",
+      bodyFont: "Roboto",
+    },
+    aestheticLevel: "enhanced" as const,
+    whatsappNumber: "",
+    phoneNumber: "",
+    portfolioProjects: [],
+  };
+
+  return generateIndexHtml(sampleData, sampleConfig);
 }
 
 function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
