@@ -24,8 +24,7 @@ export async function extractLinkedInProfile(username: string): Promise<Extracte
 }
 
 async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<ExtractedData> {
-  // Using dynamic import for node-fetch compatibility
-  const fetchFn = globalThis.fetch || (await import('node-fetch').then(m => m.default) as typeof fetch);
+  const fetchFn = globalThis.fetch;
   
   const response = await fetchFn(
     `https://fresh-linkedin-profile-data.p.rapidapi.com/get-linkedin-profile?linkedin_url=https://linkedin.com/in/${username}`,
