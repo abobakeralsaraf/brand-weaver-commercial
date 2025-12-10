@@ -313,20 +313,14 @@ export default function Home() {
 
     case "website-preview":
       return (
-        <div className="space-y-8">
-          <WebsitePreview
-            previewUrl={previewUrl || "/api/preview"}
-            onDeploy={() => setCurrentStep("deploy-options")}
-            onChangeDesign={() => setCurrentStep("customize")}
-            isDeploying={deployMutation.isPending}
-          />
-          <div className="max-w-6xl mx-auto px-4">
-            <KpiDashboard 
-              extractedData={extractedData} 
-              websiteConfig={websiteConfig} 
-            />
-          </div>
-        </div>
+        <WebsitePreview
+          previewUrl={previewUrl || "/api/preview"}
+          onDeploy={() => setCurrentStep("deploy-options")}
+          onChangeDesign={() => setCurrentStep("customize")}
+          isDeploying={deployMutation.isPending}
+          extractedData={extractedData}
+          websiteConfig={websiteConfig}
+        />
       );
 
     case "deploy-options":

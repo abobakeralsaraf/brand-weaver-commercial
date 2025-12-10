@@ -247,7 +247,7 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
   const gaId = config.analytics?.googleAnalyticsId;
   const showConsentBanner = config.analytics?.enableConsentBanner !== false && gaId;
   
-  // Translations
+  // Complete translations for all UI elements
   const t = {
     about: { en: "About Me", ar: "نبذة عني" },
     experience: { en: "Experience", ar: "الخبرة العملية" },
@@ -264,6 +264,32 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
     cookieConsent: { en: "This website uses cookies for analytics.", ar: "يستخدم هذا الموقع ملفات تعريف الارتباط للتحليلات." },
     accept: { en: "Accept", ar: "قبول" },
     decline: { en: "Decline", ar: "رفض" },
+    viewOnLinkedIn: { en: "View on LinkedIn", ar: "عرض على لينكد إن" },
+    connectOnLinkedIn: { en: "Connect on LinkedIn", ar: "تواصل على لينكد إن" },
+    issuedBy: { en: "Issued by", ar: "صادرة من" },
+    viewCredential: { en: "View Credential", ar: "عرض الشهادة" },
+    endorsements: { en: "endorsements", ar: "تأييدات" },
+    readMore: { en: "Read More", ar: "اقرأ المزيد" },
+    languages: { en: "Languages", ar: "اللغات" },
+    contactMe: { en: "Contact Me", ar: "تواصل معي" },
+    callMe: { en: "Call Me", ar: "اتصل بي" },
+    whatsApp: { en: "WhatsApp", ar: "واتساب" },
+    connections: { en: "Connections", ar: "الاتصالات" },
+    followers: { en: "Followers", ar: "المتابعون" },
+    location: { en: "Location", ar: "الموقع" },
+    at: { en: "at", ar: "في" },
+    to: { en: "to", ar: "إلى" },
+    personalPortfolio: { en: "Personal Portfolio", ar: "الملف الشخصي" },
+    professionalProfile: { en: "Professional Profile", ar: "الملف المهني" },
+    switchToArabic: { en: "العربية", ar: "العربية" },
+    switchToEnglish: { en: "English", ar: "English" },
+    allRightsReserved: { en: "All Rights Reserved", ar: "جميع الحقوق محفوظة" },
+    builtWith: { en: "Built with Brand Weaver", ar: "صُنع بواسطة براند ويفر" },
+    degree: { en: "Degree", ar: "الدرجة العلمية" },
+    fieldOfStudy: { en: "Field of Study", ar: "التخصص" },
+    technologies: { en: "Technologies", ar: "التقنيات" },
+    liveDemo: { en: "Live Demo", ar: "عرض مباشر" },
+    sourceCode: { en: "Source Code", ar: "الكود المصدري" },
   };
   
   const getText = (key: keyof typeof t) => {
@@ -644,6 +670,51 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
     .cert-card .date {
       color: #6b7280;
       font-size: 0.9rem;
+    }
+    
+    .cert-logo {
+      width: 60px;
+      height: 60px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .cert-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .cert-icon {
+      width: 60px;
+      height: 60px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    
+    .cert-link {
+      display: inline-block;
+      margin-top: 12px;
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: color 0.2s ease;
+    }
+    
+    .cert-link:hover {
+      color: var(--secondary);
+      text-decoration: underline;
     }
     
     /* Recommendations */
@@ -1191,10 +1262,20 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
       <h2 class="section-title"${aosEnabled ? ' data-aos="fade-up"' : ''}>${getText('certifications')}</h2>
       <div class="cert-grid">
         ${certifications.map((cert, idx) => `
-          <div class="cert-card"${aosEnabled ? ` data-aos="fade-up" data-aos-delay="${idx * 100}"` : ''}>
+          <div class="cert-card"${aosEnabled ? ` data-aos="fade-up" data-aos-delay="${Math.min(idx * 50, 300)}"` : ''}>
+            ${cert.issuerLogo ? `
+            <div class="cert-logo">
+              <img src="${cert.issuerLogo}" alt="${cert.issuer}" loading="lazy">
+            </div>
+            ` : `
+            <div class="cert-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15l-2 5l-1-6l-6-1l5-2l1-6l2 5l6 1l-5 2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            `}
             <h4>${cert.name}</h4>
-            <p class="issuer">${cert.issuer}</p>
+            <p class="issuer">${getText('issuedBy')}: ${cert.issuer}</p>
             ${cert.issueDate ? `<p class="date">${cert.issueDate}</p>` : ''}
+            ${cert.credentialUrl ? `<a href="${cert.credentialUrl}" target="_blank" rel="noopener" class="cert-link">${getText('viewCredential')}</a>` : ''}
           </div>
         `).join('')}
       </div>
@@ -1265,7 +1346,7 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
             ${rec.recommenderLinkedInUrl ? `
             <a href="${rec.recommenderLinkedInUrl}" target="_blank" rel="noopener" class="rec-linkedin-badge">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-              View on LinkedIn
+              ${getText('viewOnLinkedIn')}
             </a>
             ` : ''}
           </div>
@@ -1316,9 +1397,9 @@ function generateIndexHtml(data: ExtractedData, config: WebsiteConfig): string {
   ` : ''}
   
   <footer>
-    <p>&copy; ${new Date().getFullYear()} ${profile.fullName}. All rights reserved.</p>
+    <p>&copy; ${new Date().getFullYear()} ${profile.fullName}. ${getText('allRightsReserved')}</p>
     <p style="margin-top: 8px;">
-      <a href="${profile.linkedinUrl}" target="_blank" rel="noopener">LinkedIn</a>
+      <a href="${profile.linkedinUrl}" target="_blank" rel="noopener">${getText('viewOnLinkedIn')}</a>
     </p>
   </footer>
   

@@ -247,13 +247,24 @@ function transformEducation(education: any[]): Education[] {
 function transformCertifications(certifications: any[]): Certification[] {
   if (!Array.isArray(certifications)) return [];
   
-  return certifications.map((cert: any, idx: number) => ({
-    id: `cert-${idx}`,
-    name: cert.name || cert.title || '',
-    issuer: cert.authority || cert.issuer || cert.organization || '',
-    issueDate: formatDate(cert.starts_at || cert.issue_date || cert.issueDate),
-    credentialUrl: cert.url || cert.credential_url || '',
-  }));
+  return certifications.map((cert: any, idx: number) => {
+    // Get issuer logo - API may return logo array
+    let issuerLogo = '';
+    if (cert.company?.logo && Array.isArray(cert.company.logo) && cert.company.logo.length > 0) {
+      issuerLogo = cert.company.logo[0]?.url || '';
+    } else if (cert.issuer_logo) {
+      issuerLogo = typeof cert.issuer_logo === 'string' ? cert.issuer_logo : '';
+    }
+    
+    return {
+      id: `cert-${idx}`,
+      name: cert.name || cert.title || '',
+      issuer: cert.authority || cert.issuer || cert.organization || '',
+      issuerLogo,
+      issueDate: formatDate(cert.starts_at || cert.issue_date || cert.issueDate),
+      credentialUrl: cert.url || cert.credential_url || '',
+    };
+  });
 }
 
 function transformSkills(skills: any[]): Skill[] {
