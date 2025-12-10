@@ -13,6 +13,10 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### December 2024
+- **Enhanced certificate cards**: Added issuer logos, credential links, and improved styling with icon fallback
+- **Tabbed preview interface**: Full-page website preview with separate Analytics tab for KPI Dashboard
+- **Complete bilingual translations**: 50+ translation keys covering all UI elements, buttons, labels, and footer
+- **Comprehensive deployment guide**: DEPLOY.md included in source download with GitHub Pages, Netlify, and Vercel instructions
 - **Fixed complete profile data**: Updated `createPreviewHtml()` sample data to include all 10 skills, 3 certifications, 3 recommendations, 3 experience entries, 2 education entries
 - **Fixed JSON parsing bug**: All mutations (extract, generate, deploy) now properly call `.json()` on Response objects
 - **Fixed critical preview bug**: `createPreviewHtml()` now uses the actual `generateIndexHtml()` function instead of hardcoded mock data
