@@ -1,3 +1,5 @@
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
@@ -29,8 +31,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
+`${API_URL}/${queryKey.join("/")}`      credentials: "include",
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
