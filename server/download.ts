@@ -9,7 +9,7 @@ export async function createZipArchive(): Promise<Archiver> {
   });
 
   // Get latest extracted data from storage
-  const extractedData = await storage.getLatestExtractedData();
+  const extractedData = (await storage.getLatestExtractedData()) ?? null;
   
   if (extractedData) {
     archive.append(JSON.stringify(extractedData, null, 2), { name: "profile-data.json" });
@@ -79,7 +79,7 @@ export async function createSourceArchive(): Promise<Archiver> {
 
   // Get generated website files
   const websiteFiles = await storage.getLatestGeneratedWebsite();
-  const extractedData = await storage.getLatestExtractedData();
+  const extractedData = (await storage.getLatestExtractedData()) ?? null;
   
   if (websiteFiles) {
     websiteFiles.forEach((content, filename) => {

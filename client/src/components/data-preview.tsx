@@ -34,7 +34,7 @@ export function DataPreview({ data, onSaveData, onCreateWebsite }: DataPreviewPr
       icon: FileText,
       label: "Featured Posts",
       value: featuredPostsCount,
-      suffix: `/ 6`,
+      suffix: featuredPostsCount === 1 ? "post" : "posts",
     },
     {
       icon: MessageSquare,

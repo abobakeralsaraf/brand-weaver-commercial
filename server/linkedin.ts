@@ -2,23 +2,81 @@ import type { ExtractedData, WorkExperience, Education, Certification, Skill, La
 
 // LinkedIn profile extraction service using Fresh LinkedIn Profile Data API from RapidAPI
 
-export async function extractLinkedInProfile(linkedinUrlOrUsername: string): Promise<ExtractedData> {
+export type LinkedInProgressStepId =
+  | "profile"
+  | "experience"
+  | "education"
+  | "certifications"
+  | "skills"
+  | "recommendations"
+  | "posts"
+  | "images";
+
+export type LinkedInProgressStatus = "pending" | "in_progress" | "completed" | "error";
+
+export interface LinkedInExtractOptions {
+  onStepUpdate?: (update: {
+    stepId: LinkedInProgressStepId;
+    status: LinkedInProgressStatus;
+    count?: number;
+    message?: string;
+  }) => void;
+}
+
+export class LinkedInExtractionError extends Error {
+  public code:
+    | "RAPIDAPI_KEY_MISSING"
+    | "INVALID_LINKEDIN_INPUT"
+    | "RATE_LIMITED"
+    | "UPSTREAM_ERROR"
+    | "NETWORK_ERROR";
+  public httpStatus?: number;
+  public hint?: string;
+
+  constructor(params: {
+    message: string;
+    code: LinkedInExtractionError["code"];
+    httpStatus?: number;
+    hint?: string;
+    cause?: unknown;
+  }) {
+    super(params.message);
+    this.name = "LinkedInExtractionError";
+    this.code = params.code;
+    this.httpStatus = params.httpStatus;
+    this.hint = params.hint;
+    if (params.cause) (this as any).cause = params.cause;
+  }
+}
+
+export async function extractLinkedInProfile(
+  linkedinUrlOrUsername: string,
+  options?: LinkedInExtractOptions
+): Promise<ExtractedData> {
   // Check for RapidAPI key
   const rapidApiKey = process.env.RAPIDAPI_KEY;
   
   if (!rapidApiKey) {
-    throw new Error("RAPIDAPI_KEY is not configured. Please add your RapidAPI key to extract LinkedIn profiles.");
+    throw new LinkedInExtractionError({
+      code: "RAPIDAPI_KEY_MISSING",
+      message: "RAPIDAPI_KEY is not configured. Please add your RapidAPI key to extract LinkedIn profiles.",
+      hint: "Set RAPIDAPI_KEY in your server environment variables (RapidAPI → Fresh LinkedIn Scraper API).",
+    });
   }
 
   // Extract username from full LinkedIn URL or use as-is if already a username
   const username = extractUsernameFromUrl(linkedinUrlOrUsername);
   
   if (!username) {
-    throw new Error("Invalid LinkedIn URL or username provided.");
+    throw new LinkedInExtractionError({
+      code: "INVALID_LINKEDIN_INPUT",
+      message: "Invalid LinkedIn URL or username provided.",
+      hint: "Use linkedin.com/in/<username> or just the username.",
+    });
   }
 
   try {
-    return await fetchFromLinkedInApi(username, rapidApiKey);
+    return await fetchFromLinkedInApi(username, rapidApiKey, options);
   } catch (error) {
     console.error("LinkedIn API error:", error);
     throw error;
@@ -31,7 +89,11 @@ function extractUsernameFromUrl(input: string): string {
   const cleaned = input.trim();
   
   if (!cleaned) {
-    throw new Error("LinkedIn URL or username is required");
+    throw new LinkedInExtractionError({
+      code: "INVALID_LINKEDIN_INPUT",
+      message: "LinkedIn URL or username is required",
+      hint: "Provide linkedin.com/in/<username> or just the username.",
+    });
   }
   
   // If it's already just a username (no slashes or protocol), validate it
@@ -41,7 +103,11 @@ function extractUsernameFromUrl(input: string): string {
     if (/^[a-zA-Z0-9\-_]+$/.test(cleaned)) {
       return cleaned;
     }
-    throw new Error(`Invalid LinkedIn username format: ${cleaned}`);
+    throw new LinkedInExtractionError({
+      code: "INVALID_LINKEDIN_INPUT",
+      message: `Invalid LinkedIn username format: ${cleaned}`,
+      hint: "Usernames can contain letters, numbers, hyphens and underscores.",
+    });
   }
   
   // Try to extract from LinkedIn URL patterns
@@ -60,10 +126,59 @@ function extractUsernameFromUrl(input: string): string {
   }
   
   // No valid LinkedIn profile URL pattern found
-  throw new Error(`Invalid LinkedIn profile URL. Please use format: linkedin.com/in/username or just the username`);
+  throw new LinkedInExtractionError({
+    code: "INVALID_LINKEDIN_INPUT",
+    message: "Invalid LinkedIn profile URL. Please use format: linkedin.com/in/username or just the username",
+    hint: "Example: https://linkedin.com/in/williamhgates",
+  });
 }
 
-async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<ExtractedData> {
+const DEFAULT_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  opts?: { retries?: number; baseDelayMs?: number }
+): Promise<Response> {
+  const retries = Math.max(0, opts?.retries ?? 2);
+  const baseDelayMs = Math.max(50, opts?.baseDelayMs ?? 350);
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await globalThis.fetch(url, init);
+      if (!DEFAULT_RETRYABLE_STATUSES.has(res.status) || attempt === retries) {
+        return res;
+      }
+      // Retry on 429/5xx with exponential backoff + jitter
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 150);
+      await sleep(delay);
+      continue;
+    } catch (e) {
+      lastError = e;
+      if (attempt === retries) break;
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 150);
+      await sleep(delay);
+    }
+  }
+
+  throw new LinkedInExtractionError({
+    code: "NETWORK_ERROR",
+    message: "Network error while calling LinkedIn extraction API.",
+    hint: "Please try again in a moment.",
+    cause: lastError,
+  });
+}
+
+async function fetchFromLinkedInApi(
+  username: string,
+  apiKey: string,
+  options?: LinkedInExtractOptions
+): Promise<ExtractedData> {
   const fetchFn = globalThis.fetch;
   const baseUrl = "https://fresh-linkedin-scraper-api.p.rapidapi.com/api/v1/user";
   const headers = {
@@ -72,7 +187,8 @@ async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<E
   };
 
   // Fetch profile data (required)
-  const profileResponse = await fetchFn(
+  options?.onStepUpdate?.({ stepId: "profile", status: "in_progress" });
+  const profileResponse = await fetchWithRetry(
     `${baseUrl}/profile?username=${encodeURIComponent(username)}`,
     { method: "GET", headers }
   );
@@ -80,32 +196,111 @@ async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<E
   if (!profileResponse.ok) {
     const errorText = await profileResponse.text();
     console.error("LinkedIn API error response:", errorText);
-    throw new Error(`LinkedIn API returned ${profileResponse.status}: ${errorText}`);
+    if (profileResponse.status === 429) {
+      throw new LinkedInExtractionError({
+        code: "RATE_LIMITED",
+        httpStatus: 429,
+        message: "LinkedIn extraction API rate-limited the request (HTTP 429).",
+        hint: "Wait 30–60 seconds and try again, or upgrade your RapidAPI plan.",
+      });
+    }
+    throw new LinkedInExtractionError({
+      code: "UPSTREAM_ERROR",
+      httpStatus: profileResponse.status,
+      message: `LinkedIn API returned ${profileResponse.status}: ${errorText}`,
+      hint: "Check your RapidAPI subscription and that the username exists.",
+    });
   }
 
   const profileResult = await profileResponse.json() as Record<string, unknown>;
   if (profileResult.success === false || profileResult.status === 'error') {
-    throw new Error(`LinkedIn API request failed: ${profileResult.message || 'Unknown error'}`);
+    throw new LinkedInExtractionError({
+      code: "UPSTREAM_ERROR",
+      message: `LinkedIn API request failed: ${profileResult.message || 'Unknown error'}`,
+      hint: "Check your RapidAPI subscription and that the username exists.",
+    });
   }
   
   const profileData = profileResult.data as Record<string, unknown>;
   if (!profileData) {
-    throw new Error("LinkedIn API returned empty profile data");
+    throw new LinkedInExtractionError({
+      code: "UPSTREAM_ERROR",
+      message: "LinkedIn API returned empty profile data",
+      hint: "Try again or verify the LinkedIn username.",
+    });
   }
+  options?.onStepUpdate?.({ stepId: "profile", status: "completed" });
 
   // Fetch additional data in parallel (experience, skills, certifications, recommendations)
-  const [experienceResult, skillsResult, certificationsResult, recommendationsResult] = await Promise.all([
-    fetchApiEndpoint(`${baseUrl}/experience?username=${encodeURIComponent(username)}`, headers),
-    fetchApiEndpoint(`${baseUrl}/skills?username=${encodeURIComponent(username)}`, headers),
-    fetchApiEndpoint(`${baseUrl}/certifications?username=${encodeURIComponent(username)}`, headers),
-    fetchApiEndpoint(`${baseUrl}/recommendations?username=${encodeURIComponent(username)}`, headers),
-  ]);
+  const endpoints: Array<{
+    stepId: LinkedInProgressStepId;
+    url: string;
+  }> = [
+    { stepId: "experience", url: `${baseUrl}/experience?username=${encodeURIComponent(username)}` },
+    { stepId: "skills", url: `${baseUrl}/skills?username=${encodeURIComponent(username)}` },
+    { stepId: "certifications", url: `${baseUrl}/certifications?username=${encodeURIComponent(username)}` },
+    { stepId: "recommendations", url: `${baseUrl}/recommendations?username=${encodeURIComponent(username)}` },
+  ];
+
+  for (const e of endpoints) options?.onStepUpdate?.({ stepId: e.stepId, status: "in_progress" });
+
+  const results = await Promise.allSettled(
+    endpoints.map((e) => fetchApiEndpoint(e.url, headers))
+  );
+
+  const experienceResult = results[0].status === "fulfilled" ? results[0].value : null;
+  const skillsResult = results[1].status === "fulfilled" ? results[1].value : null;
+  const certificationsResult = results[2].status === "fulfilled" ? results[2].value : null;
+  const recommendationsResult = results[3].status === "fulfilled" ? results[3].value : null;
+
+  const stepCounts: Record<string, number> = {
+    experience: experienceResult?.length || 0,
+    skills: skillsResult?.length || 0,
+    certifications: certificationsResult?.length || 0,
+    recommendations: recommendationsResult?.length || 0,
+  };
+
+  endpoints.forEach((e, idx) => {
+    const settled = results[idx];
+    if (settled.status === "fulfilled") {
+      options?.onStepUpdate?.({ stepId: e.stepId, status: "completed", count: stepCounts[e.stepId] });
+    } else {
+      options?.onStepUpdate?.({
+        stepId: e.stepId,
+        status: "error",
+        message: "Failed to fetch this section; continuing with partial data.",
+      });
+    }
+  });
 
   console.log(`[LinkedIn API] Profile: ${profileData.full_name || profileData.first_name}`);
   console.log(`[LinkedIn API] Experience: ${experienceResult?.length || 0} items`);
   console.log(`[LinkedIn API] Skills: ${skillsResult?.length || 0} items`);
   console.log(`[LinkedIn API] Certifications: ${certificationsResult?.length || 0} items`);
   console.log(`[LinkedIn API] Recommendations: ${recommendationsResult?.length || 0} items`);
+
+  // The remaining sections are derived from profile payload (best-effort).
+  options?.onStepUpdate?.({
+    stepId: "education",
+    status: "completed",
+    count: Array.isArray((profileData as any).education) ? (profileData as any).education.length : 0,
+  });
+  options?.onStepUpdate?.({
+    stepId: "posts",
+    status: "completed",
+    count: Array.isArray((profileData as any).posts)
+      ? (profileData as any).posts.length
+      : Array.isArray((profileData as any).articles)
+        ? (profileData as any).articles.length
+        : 0,
+  });
+  options?.onStepUpdate?.({
+    stepId: "images",
+    status: "completed",
+    count:
+      (Array.isArray((profileData as any).avatar) ? (profileData as any).avatar.length : 0) +
+      (Array.isArray((profileData as any).background_cover_image_url) ? (profileData as any).background_cover_image_url.length : 0),
+  });
 
   return transformApiResponse(profileData, username, {
     experience: experienceResult || [],
@@ -117,7 +312,7 @@ async function fetchFromLinkedInApi(username: string, apiKey: string): Promise<E
 
 async function fetchApiEndpoint(url: string, headers: Record<string, string>): Promise<any[] | null> {
   try {
-    const response = await globalThis.fetch(url, { method: "GET", headers });
+    const response = await fetchWithRetry(url, { method: "GET", headers });
     if (!response.ok) return null;
     const result = await response.json() as Record<string, unknown>;
     return (result.data as any[]) || null;

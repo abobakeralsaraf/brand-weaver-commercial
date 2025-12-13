@@ -11,7 +11,7 @@ import { DeploymentProgress } from "@/components/deployment-progress";
 import { SuccessScreen } from "@/components/success-screen";
 import { SaveDataOptions } from "@/components/save-data-options";
 import { KpiDashboard } from "@/components/kpi-dashboard";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, ApiError, sseRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type {
   ExtractedData,
@@ -39,6 +39,7 @@ export default function Home() {
   const [websiteConfig, setWebsiteConfig] = useState<WebsiteConfig | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [websiteUrl, setWebsiteUrl] = useState<string>("");
+  const [isExtracting, setIsExtracting] = useState(false);
   const { toast } = useToast();
 
   const [extractionProgress, setExtractionProgress] = useState<ExtractionProgressType>({
@@ -86,49 +87,6 @@ export default function Home() {
   const [deploymentPercentage, setDeploymentPercentage] = useState(0);
   const [deploymentCurrentStep, setDeploymentCurrentStep] = useState("Initializing...");
 
-  const extractMutation = useMutation({
-    mutationFn: async (username: string) => {
-      const response = await apiRequest("POST", "/api/extract", { username });
-      const data = await response.json();
-      return data as ExtractedData;
-    },
-    onSuccess: (data) => {
-      setExtractedData(data);
-      setCurrentStep("preview");
-    },
-    onError: (error) => {
-      toast({
-        title: "Extraction Failed",
-        description: error.message || "Failed to extract LinkedIn profile data",
-        variant: "destructive",
-      });
-      setCurrentStep("input");
-    },
-  });
-
-  const generateMutation = useMutation({
-    mutationFn: async (config: WebsiteConfig) => {
-      const response = await apiRequest("POST", "/api/generate", {
-        data: extractedData,
-        config,
-      });
-      const result = await response.json();
-      return result as { previewUrl: string; sessionId: string };
-    },
-    onSuccess: (data) => {
-      setPreviewUrl(data.previewUrl);
-      setCurrentStep("website-preview");
-    },
-    onError: (error) => {
-      toast({
-        title: "Generation Failed",
-        description: error.message || "Failed to generate website",
-        variant: "destructive",
-      });
-      setCurrentStep("customize");
-    },
-  });
-
   const deployMutation = useMutation({
     mutationFn: async (options: DeploymentOptionsType) => {
       const response = await apiRequest("POST", "/api/deploy", options);
@@ -151,56 +109,65 @@ export default function Home() {
 
   const handleExtract = async (username: string) => {
     setCurrentStep("extracting");
-    
-    const steps = extractionProgress.steps;
-    for (let i = 0; i < steps.length; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 400 + Math.random() * 300));
-      setExtractionProgress((prev) => ({
-        ...prev,
-        percentage: ((i + 1) / steps.length) * 100,
-        currentStep: steps[i].label,
-        steps: prev.steps.map((s, idx) => ({
-          ...s,
-          status: idx < i ? "completed" : idx === i ? "in_progress" : "pending",
-          count: idx <= i ? Math.floor(Math.random() * 5) + 1 : undefined,
-        })),
-      }));
-    }
-    
+    setIsExtracting(true);
     setExtractionProgress((prev) => ({
       ...prev,
-      percentage: 100,
-      steps: prev.steps.map((s) => ({ ...s, status: "completed" })),
+      percentage: 0,
+      currentStep: "Initializing...",
+      steps: prev.steps.map((s) => ({ ...s, status: "pending", count: undefined })),
     }));
 
-    extractMutation.mutate(username);
+    try {
+      const result = await sseRequest<{ data: ExtractedData; sessionId: string }>({
+        url: "/api/extract/stream",
+        body: { username },
+        onProgress: (p) => setExtractionProgress(p as ExtractionProgressType),
+      });
+      setExtractedData(result.data);
+      setCurrentStep("preview");
+    } catch (e: any) {
+      const err = e as ApiError;
+      toast({
+        title: "Extraction Failed",
+        description: err.hint ? `${err.message}\n\n${err.hint}` : err.message || "Failed to extract LinkedIn profile data",
+        variant: "destructive",
+      });
+      setCurrentStep("input");
+    } finally {
+      setIsExtracting(false);
+    }
   };
 
   const handleGenerateWebsite = async (config: WebsiteConfig) => {
     setWebsiteConfig(config);
     setCurrentStep("generating");
-    
-    const steps = generationProgress.steps;
-    for (let i = 0; i < steps.length; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 400));
-      setGenerationProgress((prev) => ({
-        ...prev,
-        percentage: ((i + 1) / steps.length) * 100,
-        currentStep: steps[i].label,
-        steps: prev.steps.map((s, idx) => ({
-          ...s,
-          status: idx < i ? "completed" : idx === i ? "in_progress" : "pending",
-        })),
-      }));
-    }
-    
     setGenerationProgress((prev) => ({
       ...prev,
-      percentage: 100,
-      steps: prev.steps.map((s) => ({ ...s, status: "completed" })),
+      percentage: 0,
+      currentStep: "Initializing...",
+      steps: prev.steps.map((s) => ({ ...s, status: "pending" })),
     }));
 
-    generateMutation.mutate(config);
+    try {
+      if (!extractedData) {
+        throw new ApiError({ status: 400, message: "No extracted data found. Please extract your profile first." });
+      }
+      const result = await sseRequest<{ previewUrl: string; sessionId: string }>({
+        url: "/api/generate/stream",
+        body: { data: extractedData, config },
+        onProgress: (p) => setGenerationProgress(p as GenerationProgressType),
+      });
+      setPreviewUrl(result.previewUrl);
+      setCurrentStep("website-preview");
+    } catch (e: any) {
+      const err = e as ApiError;
+      toast({
+        title: "Generation Failed",
+        description: err.hint ? `${err.message}\n\n${err.hint}` : err.message || "Failed to generate website",
+        variant: "destructive",
+      });
+      setCurrentStep("customize");
+    }
   };
 
   const handleDeploy = async (options: DeploymentOptionsType) => {
@@ -275,7 +242,7 @@ export default function Home() {
       return (
         <UrlInputForm
           onSubmit={handleExtract}
-          isLoading={extractMutation.isPending}
+          isLoading={isExtracting}
         />
       );
 

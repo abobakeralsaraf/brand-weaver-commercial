@@ -1,9 +1,10 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { extractLinkedInProfile } from "./linkedin";
+import { extractLinkedInProfile, LinkedInExtractionError, type LinkedInProgressStepId, type LinkedInProgressStatus } from "./linkedin";
 import { generateWebsite, createPreviewHtml } from "./website-generator";
 import { createZipArchive, createDataJson, createImagesArchive, createSourceArchive } from "./download";
+import type { ExtractionProgress, GenerationProgress, ExtractionStep, GenerationStep } from "@shared/schema";
 
 // Generate DNS records for custom domain setup
 function generateDnsRecords(platform: string, domain: string, siteName: string) {
@@ -66,6 +67,104 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  function sseInit(res: Response) {
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    // Some proxies (nginx) buffer by default; this helps when supported.
+    res.setHeader("X-Accel-Buffering", "no");
+    (res as any).flushHeaders?.();
+    res.write("\n");
+  }
+
+  function sseSend(res: Response, params: { event: string; data: unknown }) {
+    res.write(`event: ${params.event}\n`);
+    res.write(`data: ${JSON.stringify(params.data)}\n\n`);
+  }
+
+  function toPublicError(error: any): { status: number; body: any } {
+    if (error instanceof LinkedInExtractionError) {
+      const status = error.httpStatus && Number.isFinite(error.httpStatus) ? error.httpStatus : 400;
+      return {
+        status: error.code === "RAPIDAPI_KEY_MISSING" ? 500 : status,
+        body: {
+          error: error.message,
+          code: error.code,
+          hint: error.hint,
+        },
+      };
+    }
+
+    return {
+      status: 500,
+      body: {
+        error: error?.message || "Unexpected server error",
+        code: "INTERNAL_ERROR",
+      },
+    };
+  }
+
+  function createExtractionProgress(): ExtractionProgress {
+    return {
+      percentage: 0,
+      currentStep: "Initializing...",
+      steps: [
+        { id: "profile", label: "Profile Information", status: "pending" },
+        { id: "experience", label: "Work Experience", status: "pending" },
+        { id: "education", label: "Education", status: "pending" },
+        { id: "certifications", label: "Certifications", status: "pending" },
+        { id: "skills", label: "Skills & Languages", status: "pending" },
+        { id: "recommendations", label: "Recommendations", status: "pending" },
+        { id: "posts", label: "Featured Posts", status: "pending" },
+        { id: "images", label: "Processing Images", status: "pending" },
+      ],
+    };
+  }
+
+  function updateExtractionProgress(
+    progress: ExtractionProgress,
+    update: { stepId: LinkedInProgressStepId; status: LinkedInProgressStatus; count?: number; message?: string }
+  ): ExtractionProgress {
+    const steps = progress.steps.map((s) =>
+      s.id === update.stepId
+        ? ({ ...s, status: update.status as ExtractionStep["status"], count: update.count } as ExtractionStep)
+        : s
+    );
+
+    const completed = steps.filter((s) => s.status === "completed").length;
+    const inProgress = steps.find((s) => s.status === "in_progress");
+    const currentStep = update.message || inProgress?.label || steps.find((s) => s.status === "pending")?.label || "Done";
+    const percentage = Math.min(100, (completed / steps.length) * 100 + (inProgress ? 5 : 0));
+
+    return { ...progress, steps, currentStep, percentage };
+  }
+
+  function createGenerationProgress(): GenerationProgress {
+    return {
+      percentage: 0,
+      currentStep: "Initializing...",
+      steps: [
+        { id: "html", label: "Generated HTML structure", status: "pending" },
+        { id: "styling", label: "Applied custom styling", status: "pending" },
+        { id: "images", label: "Optimized all images to WebP", status: "pending" },
+        { id: "responsive", label: "Created responsive layouts", status: "pending" },
+        { id: "seo", label: "Added SEO meta tags", status: "pending" },
+        { id: "embeds", label: "Integrated LinkedIn embeds", status: "pending" },
+        { id: "bilingual", label: "Setting up bilingual support", status: "pending" },
+        { id: "deployment", label: "Preparing deployment", status: "pending" },
+      ],
+    };
+  }
+
+  function setGenStep(progress: GenerationProgress, stepId: string, status: GenerationStep["status"], msg?: string): GenerationProgress {
+    const steps = progress.steps.map((s) => (s.id === stepId ? { ...s, status } : s));
+    const completed = steps.filter((s) => s.status === "completed").length;
+    const inProgress = steps.find((s) => s.status === "in_progress");
+    const currentStep = msg || inProgress?.label || steps.find((s) => s.status === "pending")?.label || "Done";
+    const percentage = Math.min(100, (completed / steps.length) * 100 + (inProgress ? 5 : 0));
+    return { ...progress, steps, currentStep, percentage };
+  }
   
   // Extract LinkedIn profile data
   app.post("/api/extract", async (req: Request, res: Response) => {
@@ -83,9 +182,43 @@ export async function registerRoutes(
       res.json(extractedData);
     } catch (error: any) {
       console.error("Extraction error:", error);
-      res.status(500).json({ 
-        error: error.message || "Failed to extract LinkedIn profile" 
+      const publicErr = toPublicError(error);
+      res.status(publicErr.status).json(publicErr.body);
+    }
+  });
+
+  // Extract LinkedIn profile data with SSE progress
+  app.post("/api/extract/stream", async (req: Request, res: Response) => {
+    sseInit(res);
+    let progress = createExtractionProgress();
+    sseSend(res, { event: "progress", data: progress });
+
+    try {
+      const { username } = req.body;
+      if (!username) {
+        sseSend(res, { event: "error", data: { error: "LinkedIn username is required", code: "VALIDATION_ERROR" } });
+        return res.end();
+      }
+
+      const sessionId = await storage.createSession();
+
+      const extractedData = await extractLinkedInProfile(username, {
+        onStepUpdate: (u) => {
+          progress = updateExtractionProgress(progress, u);
+          sseSend(res, { event: "progress", data: progress });
+        },
       });
+
+      await storage.saveExtractedData(sessionId, extractedData);
+      progress = { ...progress, percentage: 100, currentStep: "Completed", steps: progress.steps.map((s) => ({ ...s, status: s.status === "error" ? "error" : "completed" })) };
+      sseSend(res, { event: "progress", data: progress });
+      sseSend(res, { event: "result", data: { data: extractedData, sessionId } });
+      res.end();
+    } catch (error: any) {
+      console.error("Extraction stream error:", error);
+      const publicErr = toPublicError(error);
+      sseSend(res, { event: "error", data: publicErr.body });
+      res.end();
     }
   });
 
@@ -120,9 +253,66 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       console.error("Generation error:", error);
-      res.status(500).json({ 
-        error: error.message || "Failed to generate website" 
+      res.status(500).json({
+        error: error.message || "Failed to generate website",
+        code: "GENERATION_FAILED",
       });
+    }
+  });
+
+  // Generate website with SSE progress
+  app.post("/api/generate/stream", async (req: Request, res: Response) => {
+    sseInit(res);
+    let progress = createGenerationProgress();
+    sseSend(res, { event: "progress", data: progress });
+
+    try {
+      const { data, config } = req.body;
+      if (!data || !config) {
+        sseSend(res, { event: "error", data: { error: "Data and config are required", code: "VALIDATION_ERROR" } });
+        return res.end();
+      }
+
+      progress = setGenStep(progress, "html", "in_progress", "Generating HTML…");
+      sseSend(res, { event: "progress", data: progress });
+
+      const sessionId = await storage.createSession();
+      await storage.saveExtractedData(sessionId, data);
+      await storage.saveWebsiteConfig(sessionId, config);
+
+      // Mark key steps (best-effort; generator is synchronous today but may become slower later)
+      progress = setGenStep(progress, "html", "completed");
+      progress = setGenStep(progress, "styling", "in_progress", "Applying design system…");
+      sseSend(res, { event: "progress", data: progress });
+
+      const generatedFiles = await generateWebsite(data, config);
+
+      progress = setGenStep(progress, "styling", "completed");
+      progress = setGenStep(progress, "images", "completed");
+      progress = setGenStep(progress, "responsive", "completed");
+      progress = setGenStep(progress, "seo", "completed");
+      progress = setGenStep(progress, "embeds", "completed");
+      progress = setGenStep(progress, "bilingual", "completed");
+      progress = setGenStep(progress, "deployment", "in_progress", "Saving generated files…");
+      sseSend(res, { event: "progress", data: progress });
+
+      await storage.saveGeneratedWebsite(sessionId, generatedFiles);
+
+      progress = setGenStep(progress, "deployment", "completed");
+      progress = { ...progress, percentage: 100, currentStep: "Completed" };
+      sseSend(res, { event: "progress", data: progress });
+      sseSend(res, { event: "result", data: { previewUrl: `/api/preview?session=${sessionId}`, sessionId } });
+      res.end();
+    } catch (error: any) {
+      console.error("Generation stream error:", error);
+      sseSend(res, {
+        event: "error",
+        data: {
+          error: error?.message || "Failed to generate website",
+          code: "GENERATION_FAILED",
+        },
+      });
+      res.end();
     }
   });
 
