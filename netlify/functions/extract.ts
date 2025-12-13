@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 
 export default async (req, context) => {
@@ -17,20 +15,25 @@ export default async (req, context) => {
       );
     }
 
-    const options = {
-      method: 'GET',
-      url: 'https://linkedin-api8.p.rapidapi.com/get-profile-data',
-      params: { url: linkedinUrl },
-      headers: {
-        'x-rapidapi-key': RAPIDAPI_KEY,
-        'x-rapidapi-host': 'linkedin-api8.p.rapidapi.com'
+    const response = await fetch(
+      `https://linkedin-api8.p.rapidapi.com/get-profile-data?url=${encodeURIComponent(linkedinUrl)}`,
+      {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-key': RAPIDAPI_KEY,
+          'x-rapidapi-host': 'linkedin-api8.p.rapidapi.com'
+        }
       }
-    };
+    );
 
-    const response = await axios.request(options);
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
     
     return new Response(
-      JSON.stringify(response.data),
+      JSON.stringify(data),
       { 
         status: 200, 
         headers: { 'Content-Type': 'application/json' }
