@@ -6,7 +6,20 @@ export default async (req, context) => {
   }
 
   try {
-    const { linkedinUrl } = JSON.parse(req.body || '{}');
+    if (!RAPIDAPI_KEY) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "RAPIDAPI_KEY is not configured. Add it in Netlify environment variables to enable extraction.",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const body = JSON.parse(req.body || "{}");
+    const linkedinUrl =
+      body.linkedinUrl ||
+      (body.username ? `https://linkedin.com/in/${body.username}` : undefined);
 
     if (!linkedinUrl) {
       return new Response(

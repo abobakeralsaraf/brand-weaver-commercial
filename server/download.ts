@@ -97,7 +97,7 @@ export async function createSourceArchive(): Promise<Archiver> {
   return archive;
 }
 
-function createDeploymentReadme(data: ExtractedData | null): string {
+function createDeploymentReadme(data: ExtractedData | null | undefined): string {
   const profileName = data?.profile?.fullName || "Your Portfolio";
   return `# Deployment Guide for ${profileName}
 
