@@ -20,10 +20,13 @@ const urlSchema = z.object({
     .min(1, "Please enter a LinkedIn URL")
     .refine(
       (url) => {
-        const linkedinPattern = /^(https?:\/\/)?(www\.)?linkedin\.com\/in\/[\w-]+\/?$/;
-        return linkedinPattern.test(url);
+        const trimmed = url.trim();
+        // Accept either a full profile URL or just the username.
+        const linkedinPattern = /^(https?:\/\/)?(www\.)?linkedin\.com\/in\/[\w-]+\/?$/i;
+        const usernamePattern = /^[a-zA-Z0-9\-_]+$/;
+        return linkedinPattern.test(trimmed) || usernamePattern.test(trimmed);
       },
-      "Please enter a valid LinkedIn profile URL (e.g., linkedin.com/in/username)"
+      "Please enter a valid LinkedIn profile URL (e.g., linkedin.com/in/username) or a username"
     ),
 });
 
@@ -45,10 +48,10 @@ export function UrlInputForm({ onSubmit, isLoading }: UrlInputFormProps) {
   });
 
   const handleSubmit = (values: UrlFormValues) => {
-    const match = values.linkedinUrl.match(/linkedin\.com\/in\/([\w-]+)/);
-    if (match) {
-      onSubmit(match[1]);
-    }
+    const input = values.linkedinUrl.trim();
+    const match = input.match(/linkedin\.com\/in\/([\w-]+)/i);
+    if (match?.[1]) return onSubmit(match[1]);
+    return onSubmit(input);
   };
 
   const features = [
@@ -125,7 +128,7 @@ export function UrlInputForm({ onSubmit, isLoading }: UrlInputFormProps) {
               </form>
             </Form>
             <p className="text-sm text-muted-foreground mt-4">
-              Example: linkedin.com/in/williamhgates
+              Example: linkedin.com/in/williamhgates or williamhgates
             </p>
           </CardContent>
         </Card>
