@@ -6,17 +6,20 @@ export default async (req, context) => {
   }
 
   try {
-    const { linkedinUrl } = JSON.parse(req.body || '{}');
+    const { linkedinUrl, username } = JSON.parse(req.body || '{}');
+    const resolvedLinkedinUrl =
+      linkedinUrl ||
+      (username ? `https://linkedin.com/in/${String(username).trim()}` : null);
 
-    if (!linkedinUrl) {
+    if (!resolvedLinkedinUrl) {
       return new Response(
-        JSON.stringify({ error: 'LinkedIn URL is required' }),
+        JSON.stringify({ error: 'LinkedIn URL (or username) is required' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
     const response = await fetch(
-      `https://linkedin-api8.p.rapidapi.com/get-profile-data?url=${encodeURIComponent(linkedinUrl)}`,
+      `https://linkedin-api8.p.rapidapi.com/get-profile-data?url=${encodeURIComponent(resolvedLinkedinUrl)}`,
       {
         method: 'GET',
         headers: {
