@@ -88,7 +88,7 @@ export default function Home() {
 
   const extractMutation = useMutation({
     mutationFn: async (username: string) => {
-      const response = await apiRequest("POST", "/api/extract", { username });
+      const response = await apiRequest("POST", "/extract", { username });
       const data = await response.json();
       return data as ExtractedData;
     },
@@ -108,12 +108,16 @@ export default function Home() {
 
   const generateMutation = useMutation({
     mutationFn: async (config: WebsiteConfig) => {
-      const response = await apiRequest("POST", "/api/generate", {
+      const response = await apiRequest("POST", "/generate", {
         data: extractedData,
         config,
       });
-      const result = await response.json();
-      return result as { previewUrl: string; sessionId: string };
+      const result = (await response.json()) as { html?: string; sessionId?: string; previewUrl?: string };
+      if (typeof result.html === "string" && result.html.length > 0) {
+        const blobUrl = URL.createObjectURL(new Blob([result.html], { type: "text/html" }));
+        return { previewUrl: blobUrl, sessionId: result.sessionId ?? "" };
+      }
+      return { previewUrl: result.previewUrl ?? "/api/preview", sessionId: result.sessionId ?? "" };
     },
     onSuccess: (data) => {
       setPreviewUrl(data.previewUrl);
@@ -131,7 +135,7 @@ export default function Home() {
 
   const deployMutation = useMutation({
     mutationFn: async (options: DeploymentOptionsType) => {
-      const response = await apiRequest("POST", "/api/deploy", options);
+      const response = await apiRequest("POST", "/deploy", options);
       const result = await response.json();
       return result as { url: string };
     },
