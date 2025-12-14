@@ -1,6 +1,10 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_URL = import.meta.env.VITE_API_URL || "/api";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD && globalThis.location?.hostname?.endsWith("netlify.app")
+    ? "/.netlify/functions"
+    : "/api");
 
 async function throwIfResNotok(res: Response) {
   if (!res.ok) {
@@ -22,10 +26,10 @@ function buildApiUrl(url: string): string {
   const base = API_URL.replace(/\/+$/, "");
   const baseIsAbsolute = /^https?:\/\//i.test(base);
 
-  // If caller passed an absolute path, preserve it.
   // When API_URL is absolute, preserve the same origin by resolving via URL().
   if (url.startsWith("/")) {
-    return baseIsAbsolute ? new URL(url, base).toString() : url;
+    if (baseIsAbsolute) return new URL(url, base).toString();
+    return `${base}${url}`;
   }
 
   return `${base}/${url}`;
