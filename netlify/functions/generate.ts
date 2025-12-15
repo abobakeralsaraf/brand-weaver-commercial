@@ -14,20 +14,6 @@ type ExtractedData = {
   };
 };
 
-async function readJsonBody(req: any): Promise<Record<string, unknown>> {
-  try {
-    if (typeof req?.json === "function") return (await req.json()) as Record<string, unknown>;
-  } catch {
-    // fall through
-  }
-  const raw = typeof req?.body === "string" ? req.body : "";
-  try {
-    return JSON.parse(raw || "{}") as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
 function escapeHtml(input: string): string {
   return input
     .replace(/&/g, "&amp;")
@@ -89,26 +75,39 @@ function generateSimpleHtml(data: ExtractedData, config: WebsiteConfig): string 
 </html>`;
 }
 
-export default async (req: any) => {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
+export const handler = async (event: any) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method not allowed" };
+  }
 
-  const body = await readJsonBody(req);
-  const data = (body.data ?? null) as ExtractedData | null;
-  const config = (body.config ?? null) as WebsiteConfig | null;
+  const parsed = (() => {
+    try {
+      return JSON.parse(event.body || "{}") as Record<string, unknown>;
+    } catch {
+      return {} as Record<string, unknown>;
+    }
+  })();
+
+  const data = (parsed.data ?? null) as ExtractedData | null;
+  const config = (parsed.config ?? null) as WebsiteConfig | null;
 
   if (!data || !config) {
-    return new Response(JSON.stringify({ error: "data and config are required" }), {
-      status: 400,
+    return {
+      statusCode: 400,
       headers: { "Content-Type": "application/json" },
-    });
+      body: JSON.stringify({ error: "data and config are required" }),
+    };
   }
 
   const sessionId = randomUUID();
   const html = generateSimpleHtml(data, config);
 
-  return new Response(JSON.stringify({ sessionId, html }), {
-    status: 200,
+  return {
+    statusCode: 200,
     headers: { "Content-Type": "application/json" },
-  });
+    body: JSON.stringify({ sessionId, html }),
+  };
 };
+
+export default { handler };
 

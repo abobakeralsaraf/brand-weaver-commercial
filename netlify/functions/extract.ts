@@ -24,20 +24,6 @@ type ExtractedData = {
   extractedAt: string;
 };
 
-async function readJsonBody(req: any): Promise<Record<string, unknown>> {
-  try {
-    if (typeof req?.json === "function") return (await req.json()) as Record<string, unknown>;
-  } catch {
-    // fall through
-  }
-  const raw = typeof req?.body === "string" ? req.body : "";
-  try {
-    return JSON.parse(raw || "{}") as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
 function usernameFromLinkedInUrl(url: string): string | null {
   const match = url.match(/linkedin\.com\/in\/([a-zA-Z0-9\-_]+)/i);
   return match?.[1] ?? null;
@@ -62,22 +48,30 @@ function normalizeLocation(value: unknown): string {
   return String(value);
 }
 
-export default async (req: any) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+export const handler = async (event: any) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method not allowed" };
   }
 
   if (!RAPIDAPI_KEY) {
-    return new Response(JSON.stringify({ error: "RAPIDAPI_KEY is not configured" }), {
-      status: 500,
+    return {
+      statusCode: 500,
       headers: { "Content-Type": "application/json" },
-    });
+      body: JSON.stringify({ error: "RAPIDAPI_KEY is not configured" }),
+    };
   }
 
   try {
-    const body = await readJsonBody(req);
-    const linkedinUrl = typeof body.linkedinUrl === "string" ? body.linkedinUrl : "";
-    const usernameRaw = typeof body.username === "string" ? body.username : "";
+    const parsed = (() => {
+      try {
+        return JSON.parse(event.body || "{}") as Record<string, unknown>;
+      } catch {
+        return {} as Record<string, unknown>;
+      }
+    })();
+
+    const linkedinUrl = typeof parsed.linkedinUrl === "string" ? parsed.linkedinUrl : "";
+    const usernameRaw = typeof parsed.username === "string" ? parsed.username : "";
 
     const username =
       usernameRaw.trim() ||
@@ -85,10 +79,11 @@ export default async (req: any) => {
       "";
 
     if (!username) {
-      return new Response(JSON.stringify({ error: "LinkedIn username (or URL) is required" }), {
-        status: 400,
+      return {
+        statusCode: 400,
         headers: { "Content-Type": "application/json" },
-      });
+        body: JSON.stringify({ error: "LinkedIn username (or URL) is required" }),
+      };
     }
 
     const baseUrl = "https://fresh-linkedin-scraper-api.p.rapidapi.com/api/v1/user";
@@ -150,15 +145,18 @@ export default async (req: any) => {
       extractedAt: new Date().toISOString(),
     };
 
-    return new Response(JSON.stringify(data), {
-      status: 200,
+    return {
+      statusCode: 200,
       headers: { "Content-Type": "application/json" },
-    });
+      body: JSON.stringify(data),
+    };
   } catch (error) {
     console.error("Error extracting LinkedIn data:", error);
-    return new Response(JSON.stringify({ error: "Failed to extract profile data" }), {
-      status: 500,
+    return {
+      statusCode: 500,
       headers: { "Content-Type": "application/json" },
-    });
+      body: JSON.stringify({ error: "Failed to extract profile data" }),
+    };
   }
 };
+export default { handler };
