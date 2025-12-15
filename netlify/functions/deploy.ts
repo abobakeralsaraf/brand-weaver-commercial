@@ -1,11 +1,16 @@
-export default async (req: any) => {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
+export const handler = async (event: any) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method not allowed" };
+  }
 
   // This project currently simulates deployment (same as server/routes.ts).
   // Return a plausible URL so the UI can continue.
-  return new Response(JSON.stringify({ url: "https://your-site.netlify.app" }), {
-    status: 200,
+  return {
+    statusCode: 200,
     headers: { "Content-Type": "application/json" },
-  });
+    body: JSON.stringify({ url: "https://your-site.netlify.app" }),
+  };
 };
+
+export default { handler };
 
