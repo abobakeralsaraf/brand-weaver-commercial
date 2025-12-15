@@ -49,6 +49,19 @@ function pickLastUrl(arr: any): string | undefined {
   return typeof last?.url === "string" ? last.url : undefined;
 }
 
+function normalizeLocation(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    const v = value as any;
+    const city = typeof v.city === "string" ? v.city : "";
+    const country = typeof v.country === "string" ? v.country : "";
+    const parts = [city, country].filter(Boolean);
+    return parts.join(", ");
+  }
+  return String(value);
+}
+
 export default async (req: any) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -109,7 +122,7 @@ export default async (req: any) => {
         fullName: fullName || username,
         headline: profileData?.headline || "",
         summary: profileData?.about || profileData?.summary || "",
-        location: profileData?.location || profileData?.geoLocation || "",
+        location: normalizeLocation(profileData?.location || profileData?.geoLocation),
         profilePicture:
           pickLastUrl(profileData?.avatar) ||
           (typeof profileData?.avatar === "string" ? profileData.avatar : undefined),
